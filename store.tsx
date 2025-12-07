@@ -1,7 +1,7 @@
 
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab } from './types';
+import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story } from './types';
 
 // --- INITIAL STATE ---
 // Started empty to simulate waiting for backend
@@ -14,12 +14,15 @@ const initialState: GlobalState = {
   currentUser: null,
   activeTab: Tab.CHATS,
   chats: [],
+  contacts: [],
   selectedChatId: null,
+  selectedProductId: null,
   cart: [],
   notifications: [],
   transactions: [],
   spaces: [],
   products: [],
+  stories: [], // New stories array
   workspaceWidgets: [
     {
       id: 'w1',
@@ -64,20 +67,26 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       return { ...state, screen: action.payload };
     case 'LOGIN_SUCCESS':
       return { ...state, currentUser: action.payload, screen: 'main' };
+    case 'UPDATE_USER':
+      return { ...state, currentUser: state.currentUser ? { ...state.currentUser, ...action.payload } : null };
     case 'LOGOUT':
       return { ...initialState, screen: 'login', theme: state.theme }; // Preserve theme on logout
     case 'SET_TAB':
       return { ...state, activeTab: action.payload };
     case 'SELECT_CHAT':
       return { ...state, selectedChatId: action.payload };
+    case 'SELECT_PRODUCT':
+      return { ...state, selectedProductId: action.payload };
     
     case 'SET_DATA':
       return {
         ...state,
         chats: action.payload.chats,
+        contacts: action.payload.contacts,
         products: action.payload.products,
         spaces: action.payload.spaces,
-        transactions: action.payload.transactions
+        transactions: action.payload.transactions,
+        stories: action.payload.stories
       };
 
     case 'ADD_NOTIFICATION':
@@ -136,10 +145,48 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       };
     }
 
+    case 'CREATE_GROUP': {
+      return {
+        ...state,
+        chats: [action.payload, ...state.chats],
+        selectedChatId: action.payload.id
+      };
+    }
+
     case 'ADD_TRANSACTION':
       return {
         ...state,
         transactions: [action.payload, ...state.transactions]
+      };
+    
+    case 'ADD_PRODUCT':
+      return {
+        ...state,
+        products: [action.payload, ...state.products]
+      };
+
+    case 'ADD_STORY':
+      return {
+        ...state,
+        stories: [action.payload, ...state.stories]
+      };
+
+    case 'ADD_SPACE':
+      return {
+        ...state,
+        spaces: [...state.spaces, action.payload]
+      };
+    
+    case 'JOIN_SPACE':
+      return {
+        ...state,
+        spaces: state.spaces.map(s => {
+          if (s.id === action.payload) {
+             const joined = !s.joined;
+             return { ...s, joined, members: s.members + (joined ? 1 : -1) };
+          }
+          return s;
+        })
       };
 
     case 'TOGGLE_TASK': {

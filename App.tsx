@@ -1,5 +1,4 @@
 
-
 import React, { useEffect } from 'react';
 import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { Tab } from './types';
@@ -39,16 +38,18 @@ const MainAppContent = () => {
           
           // Initialize Data
           dispatch({ type: 'SET_LOADING', payload: true });
-          const [chats, products, spaces, transactions] = await Promise.all([
+          const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
             api.chats.list(),
+            api.contacts.list(),
             api.market.getProducts(),
             api.spaces.list(),
-            api.wallet.getTransactions()
+            api.wallet.getTransactions(),
+            api.stories.list()
           ]);
           
           dispatch({ 
             type: 'SET_DATA', 
-            payload: { chats, products, spaces, transactions } 
+            payload: { chats, contacts, products, spaces, transactions, stories } 
           });
           dispatch({ type: 'SET_LOADING', payload: false });
           
@@ -202,9 +203,9 @@ const MainAppContent = () => {
       case Tab.CHATS:
         return (
           <ChatList 
-            chats={state.chats} 
+            chats={state.chats}
+            contacts={state.contacts}
             onSelectChat={(id) => dispatch({ type: 'SELECT_CHAT', payload: id })} 
-            onNewChat={() => dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Contacts feature coming soon!' } })} 
           />
         );
       case Tab.STATUS:
@@ -218,6 +219,10 @@ const MainAppContent = () => {
       case Tab.PROFILE:
         return <ProfileScreen />;
       default:
+        // Handle Spaces implicitly here if set as active tab
+        if (state.activeTab === Tab.SPACES) {
+          return <SpacesScreen spaces={state.spaces} />;
+        }
         return <div className="p-10 text-center dark:text-white">Unknown Tab</div>;
     }
   };
@@ -234,10 +239,11 @@ const MainAppContent = () => {
           <div className="flex gap-4">
              <button 
                onClick={() => dispatch({ type: 'SET_TAB', payload: Tab.SPACES })}
-               className="w-10 h-10 rounded-full bg-gray-50 dark:bg-slate-800 flex items-center justify-center border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] dark:hover:border-[#ff1744] group transition-colors shadow-sm"
+               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] dark:hover:border-[#ff1744] group transition-all shadow-sm"
                aria-label="Go to Spaces"
              >
-               <LayoutGrid className="w-5 h-5 text-slate-600 dark:text-slate-300 group-hover:text-white" />
+               <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-white" />
+               <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-white">Spaces</span>
              </button>
           </div>
         </div>
@@ -257,7 +263,9 @@ const MainAppContent = () => {
           { id: Tab.MARKET, icon: ShoppingBag, label: 'Market' },
           { id: Tab.PROFILE, icon: UserIcon, label: 'Profile' },
         ].map((item) => {
-          const isActive = state.activeTab === item.id;
+          // Highlight Chats tab if we are in Chats OR Spaces
+          const isActive = state.activeTab === item.id || (item.id === Tab.CHATS && state.activeTab === Tab.SPACES);
+          
           return (
             <button
               key={item.id}

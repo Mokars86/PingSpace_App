@@ -77,21 +77,51 @@ export const LoginScreen: React.FC<AuthProps> = ({ onNavigate }) => {
       
       // Initialize Data after login
       dispatch({ type: 'SET_LOADING', payload: true });
-      const [chats, products, spaces, transactions] = await Promise.all([
+      const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
         api.chats.list(),
+        api.contacts.list(),
         api.market.getProducts(),
         api.spaces.list(),
-        api.wallet.getTransactions()
+        api.wallet.getTransactions(),
+        api.stories.list()
       ]);
       
-      dispatch({ type: 'SET_DATA', payload: { chats, products, spaces, transactions } });
+      dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
       dispatch({ type: 'SET_LOADING', payload: false });
       
       socketService.connect(authService.getToken()!);
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Welcome back to PingSpace!' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Welcome back, ${user.name}!` } });
     } catch (error) {
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Invalid credentials. Try again.' } });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider: string) => {
+    setLoading(true);
+    try {
+      const user = await api.auth.socialLogin(provider);
+      
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
+        api.chats.list(),
+        api.contacts.list(),
+        api.market.getProducts(),
+        api.spaces.list(),
+        api.wallet.getTransactions(),
+        api.stories.list()
+      ]);
+      
+      dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
+      dispatch({ type: 'SET_LOADING', payload: false });
+      
+      socketService.connect(authService.getToken()!);
+      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Welcome, ${user.name}!` } });
+    } catch (error) {
+       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: `${provider} login failed.` } });
     } finally {
       setLoading(false);
     }
@@ -194,7 +224,13 @@ export const LoginScreen: React.FC<AuthProps> = ({ onNavigate }) => {
         <p className="text-gray-400 text-sm mb-6 font-medium">Or continue with</p>
         <div className="flex justify-center gap-4 mb-8">
            {['Google', 'Apple', 'Facebook'].map((social) => (
-             <button key={social} className="w-14 h-14 rounded-2xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex items-center justify-center hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors" aria-label={`Sign in with ${social}`}>
+             <button 
+                key={social} 
+                onClick={() => handleSocialLogin(social)}
+                disabled={loading}
+                className="w-14 h-14 rounded-2xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex items-center justify-center hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50" 
+                aria-label={`Sign in with ${social}`}
+             >
                <img src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${social.toLowerCase()}/${social.toLowerCase()}-original.svg`} className="w-6 h-6" alt="" />
              </button>
            ))}
@@ -256,14 +292,16 @@ export const SignupScreen: React.FC<AuthProps> = ({ onNavigate }) => {
       
       // Initialize Data
       dispatch({ type: 'SET_LOADING', payload: true });
-      const [chats, products, spaces, transactions] = await Promise.all([
+      const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
         api.chats.list(),
+        api.contacts.list(),
         api.market.getProducts(),
         api.spaces.list(),
-        api.wallet.getTransactions()
+        api.wallet.getTransactions(),
+        api.stories.list()
       ]);
       
-      dispatch({ type: 'SET_DATA', payload: { chats, products, spaces, transactions } });
+      dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
       dispatch({ type: 'SET_LOADING', payload: false });
       
       socketService.connect(authService.getToken()!);
