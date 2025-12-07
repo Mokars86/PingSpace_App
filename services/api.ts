@@ -1,11 +1,11 @@
 
-
 import { User, ChatSession, Transaction, Product, Space, Message, Story } from '../types';
 import { authService } from './auth';
 
-// --- MOCK DATABASE ---
-// We initialize default data, but currentUser will be dynamic based on session
-const DB = {
+const STORAGE_KEY = 'pingspace_db_v1';
+
+// --- INITIAL DEFAULT DATA ---
+const INITIAL_DB = {
   contacts: [
     { id: 'u2', name: 'Sarah Connor', avatar: 'https://picsum.photos/200/200?random=2', status: 'Saving the future', isOnline: false },
     { id: 'u3', name: 'John Doe', avatar: 'https://picsum.photos/200/200?random=3', status: 'At the gym', isOnline: true },
@@ -75,6 +75,28 @@ const DB = {
     { id: 'st2', userId: 'u3', userName: 'John Doe', userAvatar: 'https://picsum.photos/200/200?random=3', image: 'https://picsum.photos/300/500?random=301', timestamp: '5h ago', viewed: true, caption: 'Morning grind 💪' },
   ] as Story[]
 };
+
+// --- DB PERSISTENCE LOGIC ---
+const loadDB = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : INITIAL_DB;
+  } catch (e) {
+    console.error('Failed to load DB', e);
+    return INITIAL_DB;
+  }
+};
+
+const saveDB = () => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+  } catch (e) {
+    console.error('Failed to save DB', e);
+  }
+};
+
+// Initialize DB from storage
+let DB = loadDB();
 
 // Helper to get current active user from storage or fallback to a default for safety
 const getCurrentUser = (): User => {
@@ -178,12 +200,13 @@ export const api = {
         metadata
       };
       
-      // Update Mock DB (in memory only for this session)
-      const chatIndex = DB.chats.findIndex(c => c.id === chatId);
+      // Update Mock DB
+      const chatIndex = DB.chats.findIndex((c: any) => c.id === chatId);
       if (chatIndex > -1) {
         DB.chats[chatIndex].messages.push(newMessage);
         DB.chats[chatIndex].lastMessage = text;
         DB.chats[chatIndex].lastTime = 'Now';
+        saveDB(); // PERSIST
       }
       return newMessage;
     },
@@ -212,6 +235,7 @@ export const api = {
         members: participantIds
       };
       DB.chats.unshift(groupChat);
+      saveDB(); // PERSIST
       return groupChat;
     }
   },
@@ -238,6 +262,7 @@ export const api = {
         entity: recipient
       };
       DB.transactions.unshift(newTx);
+      saveDB(); // PERSIST
       return newTx;
     },
     withdraw: async (amount: number, method: string): Promise<Transaction> => {
@@ -250,6 +275,7 @@ export const api = {
         entity: method === 'bank' ? 'Bank Withdrawal' : 'Mobile Money'
       };
       DB.transactions.unshift(newTx);
+      saveDB(); // PERSIST
       return newTx;
     },
     deposit: async (amount: number, method: string): Promise<Transaction> => {
@@ -262,6 +288,7 @@ export const api = {
         entity: method === 'card' ? 'Visa Card Deposit' : 'Mobile Money Deposit'
       };
       DB.transactions.unshift(newTx);
+      saveDB(); // PERSIST
       return newTx;
     }
   },
@@ -286,6 +313,7 @@ export const api = {
         condition: productData.condition
       };
       DB.products.unshift(newProduct);
+      saveDB(); // PERSIST
       return newProduct;
     }
   },
@@ -306,14 +334,16 @@ export const api = {
         joined: true
       };
       DB.spaces.push(newSpace);
+      saveDB(); // PERSIST
       return newSpace;
     },
     join: async (id: string): Promise<void> => {
       await delay(500);
-      const space = DB.spaces.find(s => s.id === id);
+      const space = DB.spaces.find((s: any) => s.id === id);
       if (space) {
         space.joined = !space.joined;
         space.members += space.joined ? 1 : -1;
+        saveDB(); // PERSIST
       }
     }
   },
@@ -337,6 +367,7 @@ export const api = {
         caption: caption
       };
       DB.stories.unshift(newStory);
+      saveDB(); // PERSIST
       return newStory;
     }
   }
