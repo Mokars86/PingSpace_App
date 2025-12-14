@@ -23,7 +23,7 @@ const INITIAL_DB = {
       unread: 1,
       isPinned: true,
       messages: [
-        { id: 'm0', senderId: 'ping-ai', text: 'Welcome to PingSpace! I am PingAI. How can I help?', timestamp: '10:00 AM', type: 'text' }
+        { id: 'm0', senderId: 'ping-ai', text: 'Welcome to PingSpace! I am PingAI. How can I help?', timestamp: '10:00 AM', createdAt: Date.now() - 3600000, type: 'text' }
       ]
     },
     {
@@ -33,8 +33,8 @@ const INITIAL_DB = {
       lastTime: '2m',
       unread: 3,
       messages: [
-          { id: 'm1', senderId: 'u2', text: 'Hey Alex!', timestamp: '9:30 AM', type: 'text' },
-          { id: 'm2', senderId: 'u2', text: 'Did you see the new drone on Marketplace?', timestamp: '9:31 AM', type: 'text' }
+          { id: 'm1', senderId: 'u2', text: 'Hey Alex!', timestamp: '9:30 AM', createdAt: Date.now() - 7200000, type: 'text' },
+          { id: 'm2', senderId: 'u2', text: 'Did you see the new drone on Marketplace?', timestamp: '9:31 AM', createdAt: Date.now() - 7140000, type: 'text' }
       ]
     },
     {
@@ -44,8 +44,8 @@ const INITIAL_DB = {
       lastTime: '1h',
       unread: 0,
       messages: [
-          { id: 'm3', senderId: 'u1', text: 'Here is my share for dinner.', timestamp: 'Yesterday', type: 'payment', metadata: { amount: 45.00, status: 'Completed' } },
-          { id: 'm4', senderId: 'u3', text: 'Payment received. Thanks!', timestamp: 'Yesterday', type: 'text' }
+          { id: 'm3', senderId: 'u1', text: 'Here is my share for dinner.', timestamp: 'Yesterday', createdAt: Date.now() - 86400000, type: 'payment', metadata: { amount: 45.00, status: 'Completed' } },
+          { id: 'm4', senderId: 'u3', text: 'Payment received. Thanks!', timestamp: 'Yesterday', createdAt: Date.now() - 86000000, type: 'text' }
       ]
     }
   ] as ChatSession[],
@@ -187,7 +187,7 @@ export const api = {
       await delay(500);
       return [...DB.chats]; // Return copy
     },
-    sendMessage: async (chatId: string, text: string, type: 'text' | 'image' | 'payment' = 'text', metadata?: any): Promise<Message> => {
+    sendMessage: async (chatId: string, text: string, type: Message['type'] = 'text', metadata?: any, replyTo?: Message['replyTo'], expiresAt?: number): Promise<Message> => {
       await delay(300);
       const currentUser = getCurrentUser();
       
@@ -196,8 +196,11 @@ export const api = {
         senderId: currentUser.id,
         text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: Date.now(),
         type,
-        metadata
+        metadata,
+        replyTo,
+        expiresAt
       };
       
       // Update Mock DB
@@ -229,6 +232,7 @@ export const api = {
           senderId: 'system',
           text: `Group "${name}" created with ${participantIds.length} members.`,
           timestamp: 'Just now',
+          createdAt: Date.now(),
           type: 'system'
         }],
         isGroup: true,

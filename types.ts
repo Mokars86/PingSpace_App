@@ -21,9 +21,21 @@ export interface Message {
   id: string;
   senderId: string;
   text: string;
-  timestamp: string;
-  type: 'text' | 'image' | 'payment' | 'product' | 'system';
+  timestamp: string; // Display string (e.g., "10:00 AM")
+  createdAt: number; // Unix timestamp for sorting/grouping
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'payment' | 'product' | 'system';
   metadata?: any;
+  replyTo?: {
+    id: string;
+    text: string;
+    sender: string;
+  };
+  reactions?: {
+    emoji: string;
+    count: number;
+    userIds: string[];
+  }[];
+  expiresAt?: number; // Timestamp when message should disappear
 }
 
 export interface ChatSession {
@@ -36,6 +48,7 @@ export interface ChatSession {
   isGroup?: boolean;
   isPinned?: boolean;
   members?: string[]; // IDs of participants
+  disappearingMode?: boolean; // If true, new messages disappear
 }
 
 export interface Product {
@@ -104,6 +117,35 @@ export interface Story {
   caption?: string;
 }
 
+export interface ActiveCall {
+  id: string;
+  participant: User;
+  type: 'audio' | 'video';
+  status: 'ringing' | 'connected' | 'ended';
+  startTime?: number;
+  isMuted: boolean;
+  isVideoOff: boolean;
+}
+
+export interface AppSettings {
+  notifications: {
+    push: boolean;
+    email: boolean;
+    transactions: boolean;
+    marketing: boolean;
+  };
+  privacy: {
+    readReceipts: boolean;
+    lastSeen: string;
+    profilePhoto: string;
+    about: string;
+  };
+  security: {
+    twoFactor: boolean;
+    biometric: boolean;
+  };
+}
+
 // --- GLOBAL STATE TYPES ---
 
 export type Screen = 'splash' | 'login' | 'signup' | 'main';
@@ -125,6 +167,9 @@ export interface GlobalState {
   products: Product[];
   workspaceWidgets: WorkspaceWidget[];
   stories: Story[];
+  activeCall: ActiveCall | null;
+  isOnline: boolean;
+  settings: AppSettings;
 }
 
 export type Action =
@@ -141,7 +186,7 @@ export type Action =
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
   | { type: 'ADD_TO_CART'; payload: Product }
   | { type: 'REMOVE_FROM_CART'; payload: string }
-  | { type: 'SEND_MESSAGE'; payload: { sessionId: string; text: string } }
+  | { type: 'SEND_MESSAGE'; payload: { sessionId: string; text: string; type?: Message['type']; metadata?: any; replyTo?: Message['replyTo']; expiresAt?: number } }
   | { type: 'RECEIVE_MESSAGE'; payload: { sessionId: string; message: Message } }
   | { type: 'MARK_READ'; payload: string }
   | { type: 'ADD_TRANSACTION'; payload: Transaction }
@@ -151,4 +196,14 @@ export type Action =
   | { type: 'JOIN_SPACE'; payload: string }
   | { type: 'CREATE_GROUP'; payload: ChatSession }
   | { type: 'SET_DATA'; payload: { chats: ChatSession[], contacts: User[], products: Product[], spaces: Space[], transactions: Transaction[], stories: Story[] } }
-  | { type: 'TOGGLE_TASK'; payload: { widgetId: string; taskId: string } };
+  | { type: 'TOGGLE_TASK'; payload: { widgetId: string; taskId: string } }
+  | { type: 'TOGGLE_DISAPPEARING_MODE'; payload: { sessionId: string; enabled: boolean } }
+  | { type: 'ADD_REACTION'; payload: { sessionId: string; messageId: string; emoji: string } }
+  | { type: 'DELETE_EXPIRED_MESSAGES'; payload: { sessionId: string } }
+  | { type: 'START_CALL'; payload: { participant: User; type: 'audio' | 'video' } }
+  | { type: 'END_CALL' }
+  | { type: 'SET_CALL_STATUS'; payload: ActiveCall['status'] }
+  | { type: 'TOGGLE_CALL_MUTE' }
+  | { type: 'TOGGLE_CALL_VIDEO' }
+  | { type: 'SET_ONLINE_STATUS'; payload: boolean }
+  | { type: 'UPDATE_SETTING'; payload: { section: keyof AppSettings; key: string; value: any } };

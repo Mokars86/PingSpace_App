@@ -1,4 +1,5 @@
 
+
 /**
  * Mock Storage Service
  * Simulates uploading files to a cloud storage provider (e.g., AWS S3, Cloudinary).
@@ -13,19 +14,18 @@ export const storageService = {
     return new Promise((resolve, reject) => {
       // Simulate network latency
       setTimeout(() => {
-        // In a real app, this would be a POST request to an endpoint that returns the file URL
-        console.log(`[Storage] Uploading file: ${file.name} (${file.size} bytes)`);
+        console.log(`[Storage] Uploading file: ${file.name} (${file.size} bytes, type: ${file.type})`);
         
-        // Return a fake URL based on file type for preview purposes
-        if (file.type.startsWith('image/')) {
-          // Use a random placeholder for images if we can't create a local object URL in this env safely,
-          // but URL.createObjectURL is better for immediate preview simulation.
+        // For media files, create a local object URL to allow immediate preview playback/viewing
+        // This simulates the returned CDN url
+        if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) {
           const objectUrl = URL.createObjectURL(file);
           resolve(objectUrl);
         } else {
-          resolve('https://example.com/file-download-link.pdf');
+          // For other files, return a fake downloadable link
+          resolve(`https://example.com/files/${file.name}`);
         }
-      }, 1500);
+      }, 1000);
     });
   }
 };

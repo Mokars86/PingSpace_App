@@ -1,7 +1,8 @@
 
-import React, { useEffect } from 'react';
-import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2 } from 'lucide-react';
-import { Tab } from './types';
+
+import React, { useEffect, useState } from 'react';
+import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff } from 'lucide-react';
+import { Tab, Message, ActiveCall } from './types';
 import { ChatList, ChatWindow } from './components/ChatFeatures';
 import { StatusScreen, DiscoveryScreen, SpacesScreen, MarketplaceScreen, ProfileScreen } from './components/TabScreens';
 import { SplashScreen, LoginScreen, SignupScreen } from './components/AuthScreens';
@@ -9,6 +10,110 @@ import { GlobalProvider, useGlobalState, useGlobalDispatch } from './store';
 import { api } from './services/api';
 import { authService } from './services/auth';
 import { socketService } from './services/socket';
+
+// --- CALL OVERLAY COMPONENT ---
+const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
+  const dispatch = useGlobalDispatch();
+  const [duration, setDuration] = useState(0);
+
+  // Auto-connect simulation
+  useEffect(() => {
+    if (call.status === 'ringing') {
+      const timer = setTimeout(() => {
+        dispatch({ type: 'SET_CALL_STATUS', payload: 'connected' });
+      }, 3000); // Connect after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [call.status, dispatch]);
+
+  // Duration timer
+  useEffect(() => {
+    if (call.status === 'connected') {
+      const timer = setInterval(() => {
+        setDuration(d => d + 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [call.status]);
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+      
+      {/* Background/Video Feed */}
+      <div className="absolute inset-0 bg-slate-800">
+         {call.type === 'video' && !call.isVideoOff ? (
+            <img 
+              src={`https://picsum.photos/800/1200?random=${call.participant.id}`} 
+              className="w-full h-full object-cover opacity-60" 
+              alt="Video Feed"
+            />
+         ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+               <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center">
+                  <UserIcon className="w-16 h-16 text-slate-500" />
+               </div>
+            </div>
+         )}
+         
+         {/* Self View (Mock) */}
+         {call.type === 'video' && call.status === 'connected' && (
+            <div className="absolute top-4 right-4 w-28 h-36 bg-black rounded-xl overflow-hidden border-2 border-white/20 shadow-xl">
+               <img src="https://picsum.photos/200/300" className="w-full h-full object-cover" alt="Me" />
+            </div>
+         )}
+      </div>
+
+      {/* Call Info */}
+      <div className="absolute top-12 flex flex-col items-center z-10 w-full">
+         <div className="w-24 h-24 rounded-full border-4 border-white/10 p-1 mb-4 shadow-2xl">
+            <img src={call.participant.avatar} className="w-full h-full rounded-full object-cover" alt={call.participant.name} />
+         </div>
+         <h2 className="text-2xl font-bold text-white mb-1">{call.participant.name}</h2>
+         <p className="text-white/60 font-medium animate-pulse">
+            {call.status === 'ringing' ? 'Calling...' : formatTime(duration)}
+         </p>
+      </div>
+
+      {/* Controls */}
+      <div className="absolute bottom-12 w-full max-w-sm px-8 z-10">
+         <div className="flex items-center justify-between bg-black/20 backdrop-blur-md rounded-3xl p-4 border border-white/10">
+            <button 
+              onClick={() => dispatch({type: 'TOGGLE_CALL_MUTE'})}
+              className={`p-4 rounded-full transition-all ${call.isMuted ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+               {call.isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+            
+            <button 
+              onClick={() => dispatch({type: 'END_CALL'})}
+              className="p-5 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/40 hover:scale-110 transition-transform"
+            >
+               <PhoneOff className="w-8 h-8" />
+            </button>
+
+            {call.type === 'video' ? (
+               <button 
+                 onClick={() => dispatch({type: 'TOGGLE_CALL_VIDEO'})}
+                 className={`p-4 rounded-full transition-all ${call.isVideoOff ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}
+               >
+                  {call.isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+               </button>
+            ) : (
+               <button className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20">
+                  <Maximize2 className="w-6 h-6" />
+               </button>
+            )}
+         </div>
+      </div>
+    </div>
+  );
+};
 
 // --- MAIN CONTENT COMPONENT ---
 const MainAppContent = () => {
@@ -25,7 +130,21 @@ const MainAppContent = () => {
     localStorage.setItem('pingspace_theme', state.theme);
   }, [state.theme]);
 
-  // --- 2. INITIALIZATION & AUTH CHECK ---
+  // --- 2. OFFLINE DETECTION ---
+  useEffect(() => {
+    const handleOnline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: true });
+    const handleOffline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: false });
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [dispatch]);
+
+  // --- 3. INITIALIZATION & AUTH CHECK ---
   useEffect(() => {
     const initApp = async () => {
       // Small artificial delay for splash screen visibility
@@ -71,7 +190,7 @@ const MainAppContent = () => {
     }
   }, [state.screen, dispatch]);
 
-  // --- 3. SOCKET LISTENERS ---
+  // --- 4. SOCKET LISTENERS ---
   useEffect(() => {
     // Only set up listeners if we are logged in
     if (state.currentUser) {
@@ -88,7 +207,7 @@ const MainAppContent = () => {
     }
   }, [state.currentUser, dispatch]);
 
-  // --- 4. AUTO-REMOVE NOTIFICATIONS ---
+  // --- 5. AUTO-REMOVE NOTIFICATIONS ---
   useEffect(() => {
     if (state.notifications.length > 0) {
       const timer = setTimeout(() => {
@@ -98,15 +217,15 @@ const MainAppContent = () => {
     }
   }, [state.notifications, dispatch]);
 
-  const handleSendMessage = async (sessionId: string, text: string) => {
+  const handleSendMessage = async (sessionId: string, text: string, type: Message['type'] = 'text', metadata?: any) => {
     // Update UI immediately (Optimistic UI)
-    dispatch({ type: 'SEND_MESSAGE', payload: { sessionId, text } });
+    dispatch({ type: 'SEND_MESSAGE', payload: { sessionId, text, type, metadata } });
     
     try {
       // Send to Backend
-      await api.chats.sendMessage(sessionId, text);
+      await api.chats.sendMessage(sessionId, text, type, metadata);
       // Emit via Socket
-      socketService.emit('send_message', { sessionId, text });
+      socketService.emit('send_message', { sessionId, text, type, metadata });
     } catch (e) {
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to send message' } });
     }
@@ -186,100 +305,92 @@ const MainAppContent = () => {
   // --- MAIN APP ---
   const selectedChat = state.chats.find(c => c.id === state.selectedChatId);
 
-  if (state.selectedChatId && selectedChat) {
-    return (
-      <ChatWindow 
-        session={selectedChat} 
-        currentUser={state.currentUser!}
-        onBack={() => dispatch({ type: 'SELECT_CHAT', payload: null })}
-        onSendMessage={handleSendMessage}
-        onBotResponse={handleBotResponse}
-      />
-    );
-  }
-
-  const renderTabContent = () => {
-    switch (state.activeTab) {
-      case Tab.CHATS:
-        return (
-          <ChatList 
-            chats={state.chats}
-            contacts={state.contacts}
-            onSelectChat={(id) => dispatch({ type: 'SELECT_CHAT', payload: id })} 
-          />
-        );
-      case Tab.STATUS:
-        return <StatusScreen />;
-      case Tab.DISCOVERY:
-        return <DiscoveryScreen />;
-      case Tab.SPACES:
-        return <SpacesScreen spaces={state.spaces} />;
-      case Tab.MARKET:
-        return <MarketplaceScreen />;
-      case Tab.PROFILE:
-        return <ProfileScreen />;
-      default:
-        // Handle Spaces implicitly here if set as active tab
-        if (state.activeTab === Tab.SPACES) {
-          return <SpacesScreen spaces={state.spaces} />;
-        }
-        return <div className="p-10 text-center dark:text-white">Unknown Tab</div>;
-    }
-  };
-
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-white font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-200 dark:border-slate-800 transition-colors duration-300">
       {renderNotifications()}
       {renderLoading()}
+      {state.activeCall && <CallOverlay call={state.activeCall} />}
 
-      {/* Dynamic Header */}
-      {state.activeTab === Tab.CHATS && (
-        <div className="p-4 flex justify-between items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur z-10 sticky top-0 border-b border-gray-100 dark:border-slate-800">
-          <h1 className="text-xl font-bold tracking-wide font-[Poppins] text-[#ff1744]">PingSpace</h1>
-          <div className="flex gap-4">
-             <button 
-               onClick={() => dispatch({ type: 'SET_TAB', payload: Tab.SPACES })}
-               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] dark:hover:border-[#ff1744] group transition-all shadow-sm"
-               aria-label="Go to Spaces"
-             >
-               <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-white" />
-               <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-white">Spaces</span>
-             </button>
-          </div>
+      {/* Offline Banner */}
+      {!state.isOnline && (
+        <div className="bg-slate-800 dark:bg-slate-900 text-white text-[10px] font-bold text-center py-1.5 absolute top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 border-b border-white/10">
+           <WifiOff className="w-3 h-3" />
+           You are currently offline. Using cached data.
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
-        {renderTabContent()}
-      </main>
+      {/* Render Chat Window if selected */}
+      {state.selectedChatId && selectedChat ? (
+        <ChatWindow 
+          session={selectedChat} 
+          currentUser={state.currentUser!}
+          onBack={() => dispatch({ type: 'SELECT_CHAT', payload: null })}
+          onSendMessage={handleSendMessage}
+          onBotResponse={handleBotResponse}
+        />
+      ) : (
+        <>
+          {/* Dynamic Header */}
+          {state.activeTab === Tab.CHATS && (
+            <div className={`p-4 flex justify-between items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur z-10 sticky top-0 border-b border-gray-100 dark:border-slate-800 ${!state.isOnline ? 'mt-6' : ''}`}>
+              <h1 className="text-xl font-bold tracking-wide font-[Poppins] text-[#ff1744]">PingSpace</h1>
+              <div className="flex gap-4">
+                 <button 
+                   onClick={() => dispatch({ type: 'SET_TAB', payload: Tab.SPACES })}
+                   className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] dark:hover:border-[#ff1744] group transition-all shadow-sm"
+                   aria-label="Go to Spaces"
+                 >
+                   <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-white" />
+                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-white">Spaces</span>
+                 </button>
+              </div>
+            </div>
+          )}
 
-      {/* Bottom Navigation */}
-      <nav className="h-[72px] bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-between items-center px-2 pb-2 fixed bottom-0 w-full max-w-md z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] transition-colors duration-300">
-        {[
-          { id: Tab.CHATS, icon: MessageCircle, label: 'Chats' },
-          { id: Tab.STATUS, icon: CircleDashed, label: 'Status' },
-          { id: Tab.DISCOVERY, icon: Compass, label: 'Discover' },
-          { id: Tab.MARKET, icon: ShoppingBag, label: 'Market' },
-          { id: Tab.PROFILE, icon: UserIcon, label: 'Profile' },
-        ].map((item) => {
-          // Highlight Chats tab if we are in Chats OR Spaces
-          const isActive = state.activeTab === item.id || (item.id === Tab.CHATS && state.activeTab === Tab.SPACES);
-          
-          return (
-            <button
-              key={item.id}
-              onClick={() => dispatch({ type: 'SET_TAB', payload: item.id as Tab })}
-              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors duration-200 ${isActive ? 'text-[#ff1744]' : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'}`}
-              aria-selected={isActive}
-              role="tab"
-            >
-              <item.icon className={`w-6 h-6 ${isActive ? 'fill-[#ff1744]/10' : ''}`} strokeWidth={isActive ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+          {/* Main Content Area */}
+          <main className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+            {state.activeTab === Tab.CHATS && (
+              <ChatList 
+                chats={state.chats}
+                contacts={state.contacts}
+                onSelectChat={(id) => dispatch({ type: 'SELECT_CHAT', payload: id })} 
+              />
+            )}
+            {state.activeTab === Tab.STATUS && <StatusScreen />}
+            {state.activeTab === Tab.DISCOVERY && <DiscoveryScreen />}
+            {state.activeTab === Tab.SPACES && <SpacesScreen spaces={state.spaces} />}
+            {state.activeTab === Tab.MARKET && <MarketplaceScreen />}
+            {state.activeTab === Tab.PROFILE && <ProfileScreen />}
+          </main>
+
+          {/* Bottom Navigation */}
+          <nav className="h-[72px] bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-between items-center px-2 pb-2 fixed bottom-0 w-full max-w-md z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] transition-colors duration-300">
+            {[
+              { id: Tab.CHATS, icon: MessageCircle, label: 'Chats' },
+              { id: Tab.STATUS, icon: CircleDashed, label: 'Status' },
+              { id: Tab.DISCOVERY, icon: Compass, label: 'Discover' },
+              { id: Tab.MARKET, icon: ShoppingBag, label: 'Market' },
+              { id: Tab.PROFILE, icon: UserIcon, label: 'Profile' },
+            ].map((item) => {
+              // Highlight Chats tab if we are in Chats OR Spaces
+              const isActive = state.activeTab === item.id || (item.id === Tab.CHATS && state.activeTab === Tab.SPACES);
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => dispatch({ type: 'SET_TAB', payload: item.id as Tab })}
+                  className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors duration-200 ${isActive ? 'text-[#ff1744]' : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'}`}
+                  aria-selected={isActive}
+                  role="tab"
+                >
+                  <item.icon className={`w-6 h-6 ${isActive ? 'fill-[#ff1744]/10' : ''}`} strokeWidth={isActive ? 2.5 : 2} />
+                  <span className="text-[10px] font-medium">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </>
+      )}
     </div>
   );
 };

@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Updated viewport for mobile: prevents zooming, handles safe areas (notch), disables scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/manifest.json">
     <title>PingSpace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -39,6 +45,18 @@
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #ff1744; 
+      }
+      /* Hide scrollbar for clean mobile look but keep functionality */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      /* Prevent pull-to-refresh on mobile to feel more like an app */
+      body {
+        overscroll-behavior-y: none;
       }
     </style>
   <script type="importmap">

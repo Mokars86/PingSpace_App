@@ -53,7 +53,27 @@ const initialState: GlobalState = {
         { label: 'Jira Board', url: '#' }
       ]
     }
-  ]
+  ],
+  activeCall: null,
+  isOnline: navigator.onLine,
+  settings: {
+    notifications: {
+      push: true,
+      email: true,
+      transactions: true,
+      marketing: false
+    },
+    privacy: {
+      readReceipts: true,
+      lastSeen: 'Everyone',
+      profilePhoto: 'Everyone',
+      about: 'Everyone'
+    },
+    security: {
+      twoFactor: false,
+      biometric: true
+    }
+  }
 };
 
 // --- REDUCER ---
@@ -114,13 +134,17 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       return { ...state, cart: state.cart.filter(item => item.id !== action.payload) };
 
     case 'SEND_MESSAGE': {
-      const { sessionId, text } = action.payload;
+      const { sessionId, text, type, metadata, replyTo, expiresAt } = action.payload;
       const newMessage: Message = {
         id: Date.now().toString(),
         senderId: state.currentUser?.id || 'u1',
         text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'text'
+        createdAt: Date.now(),
+        type: type || 'text',
+        metadata: metadata,
+        replyTo: replyTo,
+        expiresAt: expiresAt
       };
       
       return {
@@ -202,6 +226,126 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         })
       };
     }
+
+    case 'TOGGLE_DISAPPEARING_MODE': {
+      return {
+        ...state,
+        chats: state.chats.map(c => 
+          c.id === action.payload.sessionId 
+            ? { ...c, disappearingMode: action.payload.enabled }
+            : c
+        )
+      };
+    }
+
+    case 'ADD_REACTION': {
+      const { sessionId, messageId, emoji } = action.payload;
+      return {
+        ...state,
+        chats: state.chats.map(chat => {
+          if (chat.id !== sessionId) return chat;
+          return {
+            ...chat,
+            messages: chat.messages.map(msg => {
+              if (msg.id !== messageId) return msg;
+              
+              const reactions = msg.reactions || [];
+              const existingReaction = reactions.find(r => r.emoji === emoji);
+              
+              let newReactions;
+              if (existingReaction) {
+                // Toggle logic: if user already reacted, typically remove it, but for simplicity we just increment or add
+                newReactions = reactions.map(r => r.emoji === emoji ? { ...r, count: r.count + 1 } : r);
+              } else {
+                newReactions = [...reactions, { emoji, count: 1, userIds: ['me'] }];
+              }
+              
+              return { ...msg, reactions: newReactions };
+            })
+          };
+        })
+      };
+    }
+
+    case 'DELETE_EXPIRED_MESSAGES': {
+      const now = Date.now();
+      return {
+        ...state,
+        chats: state.chats.map(chat => {
+          if (chat.id !== action.payload.sessionId) return chat;
+          
+          // Filter out expired messages
+          const validMessages = chat.messages.filter(msg => {
+            if (!msg.expiresAt) return true;
+            return msg.expiresAt > now;
+          });
+
+          if (validMessages.length === chat.messages.length) return chat;
+
+          return {
+            ...chat,
+            messages: validMessages,
+            lastMessage: validMessages.length > 0 ? validMessages[validMessages.length - 1].text : 'Messages expired'
+          };
+        })
+      };
+    }
+
+    case 'START_CALL':
+      return {
+        ...state,
+        activeCall: {
+          id: Date.now().toString(),
+          participant: action.payload.participant,
+          type: action.payload.type,
+          status: 'ringing',
+          isMuted: false,
+          isVideoOff: false
+        }
+      };
+
+    case 'END_CALL':
+      return {
+        ...state,
+        activeCall: null
+      };
+
+    case 'SET_CALL_STATUS':
+      return state.activeCall ? {
+        ...state,
+        activeCall: {
+          ...state.activeCall,
+          status: action.payload,
+          startTime: action.payload === 'connected' ? Date.now() : state.activeCall.startTime
+        }
+      } : state;
+
+    case 'TOGGLE_CALL_MUTE':
+      return state.activeCall ? {
+        ...state,
+        activeCall: { ...state.activeCall, isMuted: !state.activeCall.isMuted }
+      } : state;
+
+    case 'TOGGLE_CALL_VIDEO':
+      return state.activeCall ? {
+        ...state,
+        activeCall: { ...state.activeCall, isVideoOff: !state.activeCall.isVideoOff }
+      } : state;
+
+    case 'SET_ONLINE_STATUS':
+      return { ...state, isOnline: action.payload };
+
+    case 'UPDATE_SETTING':
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          [action.payload.section]: {
+            ...state.settings[action.payload.section],
+            [action.payload.key]: action.payload.value
+          }
+        }
+      };
 
     default:
       return state;

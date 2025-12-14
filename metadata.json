@@ -1,5 +1,8 @@
 {
-  "name": "Copy of PingSpace",
+  "name": "PingSpace",
   "description": "A futuristic, mobile-first social ecosystem combining chat, discovery, spaces, marketplace, and a digital wallet.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }

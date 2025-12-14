@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Plus, Heart, MessageCircle, Share2, 
@@ -13,7 +11,8 @@ import {
   ChevronLeft, ChevronRight, Camera, Moon, Sun, ShieldCheck, Key,
   Layout, ListTodo, Calendar, Link, MoreHorizontal,
   UploadCloud, Tag, Star, Truck, MapPin, Globe, Loader2,
-  Radio, Hash, Play, Flame, Landmark, Maximize2, Laptop, Monitor, Mail, ChevronDown
+  Radio, Hash, Play, Flame, Landmark, Maximize2, Laptop, Monitor, Mail, ChevronDown,
+  Bell, Eye, EyeOff, AlertTriangle
 } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
 import { Space, WorkspaceWidget, Product, Story } from '../types';
@@ -78,6 +77,7 @@ const StoryViewerModal: React.FC<{ story: Story | null; onClose: () => void }> =
   );
 };
 
+// ... (AddStoryModal, AddSpaceModal, StatusScreen, SpaceCard, DiscoveryScreen, SpacesScreen, SellItemModal, ProductDetailView, MarketplaceScreen remain unchanged) ...
 // --- Add Story Modal ---
 const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const dispatch = useGlobalDispatch();
@@ -319,338 +319,152 @@ export const StatusScreen: React.FC = () => {
   );
 };
 
+// --- Space Card Component ---
+const SpaceCard: React.FC<{ space: Space; onJoin: (id: string) => void }> = ({ space, onJoin }) => (
+  <div className="min-w-[280px] md:min-w-[320px] bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm snap-center group">
+    <div className="h-32 bg-gray-200 dark:bg-slate-800 relative overflow-hidden">
+      <img src={space.image} alt={space.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+      <div className="absolute bottom-3 left-3 text-white">
+        <h3 className="font-bold text-lg">{space.name}</h3>
+        <p className="text-xs opacity-90">{space.members.toLocaleString()} members</p>
+      </div>
+    </div>
+    <div className="p-4">
+      <p className="text-sm text-gray-500 dark:text-slate-400 mb-4 line-clamp-2">{space.description}</p>
+      <button 
+        onClick={() => onJoin(space.id)}
+        className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
+          space.joined 
+            ? 'bg-gray-100 dark:bg-slate-800 text-slate-900 dark:text-white' 
+            : 'bg-[#ff1744] text-white shadow-lg shadow-red-500/30'
+        }`}
+      >
+        {space.joined ? 'Joined' : 'Join Space'}
+      </button>
+    </div>
+  </div>
+);
+
 // --- Discovery Screen ---
 export const DiscoveryScreen: React.FC = () => {
-  const { products } = useGlobalState();
-  const [activeTab, setActiveTab] = useState('All');
-  const [following, setFollowing] = useState<string[]>([]);
-  const [likes, setLikes] = useState<string[]>([]);
-
-  const toggleFollow = (id: string) => {
-    setFollowing(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
-  const toggleLike = (id: string) => {
-    setLikes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
-  const trendingTags = [
-    { name: 'Tech', count: '12k' },
-    { name: 'Crypto', count: '8.4k' },
-    { name: 'Art', count: '5k' },
-    { name: 'Music', count: '3.2k' },
-    { name: 'Gaming', count: '15k' }
-  ];
-
-  const liveUsers = [
-    { id: 'l1', name: 'Alice Tech', viewers: 1200, avatar: 'https://picsum.photos/100/100?random=50' },
-    { id: 'l2', name: 'Crypto King', viewers: 850, avatar: 'https://picsum.photos/100/100?random=51' },
-    { id: 'l3', name: 'Design Daily', viewers: 2300, avatar: 'https://picsum.photos/100/100?random=52' },
-  ];
+  const { spaces, products } = useGlobalState();
+  const dispatch = useGlobalDispatch();
 
   return (
-    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950 transition-colors">
-      {/* Header */}
-      <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-30 p-4 border-b border-gray-100 dark:border-slate-800">
-        <div className="relative shadow-sm rounded-2xl">
-          <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search trends, people..." 
-            className="w-full bg-gray-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all placeholder-gray-500 font-bold" 
-          />
-        </div>
-        <div className="flex gap-2 mt-4 overflow-x-auto no-scrollbar">
-          {['All', 'Live', 'People', 'Media', 'Shop'].map(filter => (
-            <button 
-              key={filter} 
-              onClick={() => setActiveTab(filter)}
-              className={`px-5 py-2 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${
-                activeTab === filter 
-                ? 'bg-[#ff1744] text-white border-[#ff1744] shadow-md shadow-red-500/20' 
-                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-[#ff1744]'
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="p-4 space-y-8">
+    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950">
+      <div className="p-4 pt-6">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 font-[Poppins]">Discover</h1>
         
-        {/* Happening Now (Live) */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Radio className="w-5 h-5 text-[#ff1744] animate-pulse" />
-            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Happening Now</h3>
-          </div>
-          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-            {liveUsers.map(user => (
-              <div key={user.id} className="relative flex-shrink-0 cursor-pointer group">
-                <div className="w-20 h-20 rounded-2xl p-[2px] bg-gradient-to-tr from-[#ff1744] to-purple-600 relative">
-                  <img src={user.avatar} className="w-full h-full rounded-[14px] border-2 border-white dark:border-slate-900 object-cover" alt={user.name} />
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-[#ff1744] text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                    <Users className="w-2 h-2" /> {(user.viewers/1000).toFixed(1)}k
-                  </div>
-                </div>
-                <p className="text-xs font-bold text-center mt-3 text-slate-700 dark:text-slate-300">{user.name}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* Search Bar */}
+        <div className="relative mb-8">
+           <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+           <input 
+             type="text" 
+             placeholder="Search people, spaces, items..." 
+             className="w-full bg-white dark:bg-slate-900 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+           />
+        </div>
 
-        {/* Featured Hero Banner */}
-        <section className="relative w-full aspect-[2/1] rounded-3xl overflow-hidden shadow-lg group cursor-pointer">
-           <img src="https://picsum.photos/800/400?random=88" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Featured" />
-           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
-              <span className="bg-[#ff1744] text-white text-[10px] font-bold px-2 py-1 rounded-md w-fit mb-2">FEATURED EVENT</span>
-              <h2 className="text-2xl font-bold text-white mb-1">The Future of AI Art</h2>
-              <p className="text-gray-200 text-sm line-clamp-2">Join top creators discussing the impact of generative AI on digital art.</p>
+        {/* Trending Spaces */}
+        <div className="mb-8">
+           <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                 <Flame className="w-5 h-5 text-orange-500" /> Trending Spaces
+              </h2>
+              <button className="text-[#ff1744] text-xs font-bold">View All</button>
            </div>
-        </section>
-
-        {/* Trending Tags */}
-        <section>
-           <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-             <Flame className="w-5 h-5 text-orange-500" /> Trending Topics
-           </h3>
-           <div className="flex flex-wrap gap-2">
-             {trendingTags.map((tag, i) => (
-                <div key={i} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-[#ff1744] cursor-pointer transition-colors group">
-                   <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 group-hover:bg-[#ff1744]/10 group-hover:text-[#ff1744]">
-                      <Hash className="w-4 h-4" />
-                   </div>
-                   <div>
-                      <p className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-[#ff1744]">{tag.name}</p>
-                      <p className="text-[10px] text-gray-400">{tag.count} posts</p>
-                   </div>
-                </div>
-             ))}
+           <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x no-scrollbar">
+              {spaces.map(space => (
+                 <SpaceCard key={space.id} space={space} onJoin={(id) => dispatch({ type: 'JOIN_SPACE', payload: id })} />
+              ))}
            </div>
-        </section>
+        </div>
 
-        {/* Masonry Grid (Explore) */}
-        <section>
-          <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Explore For You</h3>
-          <div className="columns-2 gap-4 space-y-4">
-             {/* Mix of Posts and Products */}
-             {[1,2,3,4,5,6].map((i) => (
-               <div key={i} className="break-inside-avoid bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
-                  <div className="relative">
-                     <img src={`https://picsum.photos/400/${i % 2 === 0 ? '500' : '300'}?random=${i+100}`} className="w-full h-auto object-cover" alt="Content" />
-                     <button 
-                       onClick={(e) => { e.stopPropagation(); toggleLike(`p_${i}`); }}
-                       className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-[#ff1744] transition-colors"
-                     >
-                       <Heart className={`w-4 h-4 ${likes.includes(`p_${i}`) ? 'fill-white' : ''}`} />
-                     </button>
-                     {i % 3 === 0 && (
-                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1">
-                           <Play className="w-3 h-3 text-white fill-white" />
-                           <span className="text-[10px] text-white font-bold">0:30</span>
-                        </div>
-                     )}
-                  </div>
-                  <div className="p-3">
-                     <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2 mb-2">
-                        {i % 2 === 0 ? 'Futuristic architecture design concepts 🏙️' : 'Summer vibes only ☀️ #travel'}
-                     </h4>
-                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                           <img src={`https://picsum.photos/50/50?random=${i+200}`} className="w-6 h-6 rounded-full" alt="User" />
-                           <span className="text-xs text-gray-500 font-medium truncate w-16">User_{i}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-gray-400">
-                           <Heart className="w-3 h-3" /> <span className="text-[10px]">{i * 42}</span>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-             ))}
-             
-             {/* Insert a Product Card in the grid */}
-             {products.slice(0, 1).map(p => (
-               <div key={p.id} className="break-inside-avoid bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm relative">
-                  <div className="absolute top-3 left-3 bg-[#ff1744] text-white text-[10px] font-bold px-2 py-1 rounded-md z-10">SPONSORED</div>
-                  <img src={p.image} className="w-full aspect-square object-cover" alt={p.title} />
-                  <div className="p-3">
-                     <h4 className="font-bold text-sm text-slate-900 dark:text-white">{p.title}</h4>
-                     <div className="flex justify-between items-center mt-1">
-                        <span className="text-[#ff1744] font-bold">${p.price}</span>
-                        <button className="p-1.5 bg-gray-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-[#ff1744] hover:text-white transition-colors">
-                           <ShoppingCart className="w-4 h-4" />
-                        </button>
-                     </div>
-                  </div>
-               </div>
-             ))}
-          </div>
-        </section>
-
+        {/* For You */}
+        <div>
+           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Recommended For You</h2>
+           <div className="grid grid-cols-2 gap-4">
+              {products.slice(0, 4).map(product => (
+                 <div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm">
+                    <div className="aspect-square bg-gray-100 dark:bg-slate-800 relative">
+                       <img src={product.image} className="w-full h-full object-cover" />
+                       <div className="absolute top-2 right-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-slate-900 dark:text-white">
+                          ${product.price}
+                       </div>
+                    </div>
+                    <div className="p-3">
+                       <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{product.title}</h3>
+                       <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{product.category}</p>
+                    </div>
+                 </div>
+              ))}
+           </div>
+        </div>
       </div>
     </div>
   );
 };
 
 // --- Spaces Screen ---
-export const SpacesScreen: React.FC<{spaces: Space[]}> = ({ spaces }) => {
-  const [activeView, setActiveView] = useState<'community' | 'desk'>('community');
+export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
   const [showAddSpace, setShowAddSpace] = useState(false);
-  const { workspaceWidgets } = useGlobalState();
   const dispatch = useGlobalDispatch();
 
-  const joinedSpaces = spaces.filter(s => s.joined);
-  const discoverSpaces = spaces.filter(s => !s.joined);
-
-  const handleJoin = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await api.spaces.join(id);
-      dispatch({ type: 'JOIN_SPACE', payload: id });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Space updated' } });
-    } catch (err) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Action failed' } });
-    }
-  };
-
-  const renderWidget = (widget: WorkspaceWidget) => {
-    return (
-      <div key={widget.id} className={`bg-white dark:bg-slate-900 rounded-2xl p-4 border border-gray-100 dark:border-slate-800 shadow-sm ${widget.w} animate-in zoom-in-95`}>
-        <div className="flex justify-between items-center mb-3">
-           <div className="flex items-center gap-2 text-[#ff1744]">
-             {widget.type === 'tasks' && <ListTodo className="w-4 h-4" />}
-             {widget.type === 'notes' && <Layout className="w-4 h-4" />}
-             {widget.type === 'links' && <Link className="w-4 h-4" />}
-             <h4 className="font-bold text-sm text-slate-900 dark:text-white">{widget.title}</h4>
-           </div>
-           <MoreHorizontal className="w-4 h-4 text-gray-400 cursor-pointer" />
-        </div>
-        
-        <div className="space-y-2">
-           {widget.type === 'tasks' && widget.content.map((task: any) => (
-             <div key={task.id} onClick={() => dispatch({type: 'TOGGLE_TASK', payload: {widgetId: widget.id, taskId: task.id}})} className="flex items-center gap-3 cursor-pointer group">
-               <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${task.done ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-slate-600'}`}>
-                 {task.done && <Check className="w-3 h-3 text-white" />}
-               </div>
-               <span className={`text-sm ${task.done ? 'text-gray-400 line-through' : 'text-slate-700 dark:text-slate-300'}`}>{task.text}</span>
-             </div>
-           ))}
-           
-           {widget.type === 'notes' && (
-             <p className="text-sm text-gray-500 dark:text-slate-400 italic leading-relaxed">{widget.content}</p>
-           )}
-
-           {widget.type === 'links' && widget.content.map((link: any, i: number) => (
-             <a key={i} href={link.url} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{link.label}</span>
-               <ArrowUpRight className="w-3 h-3 text-gray-400" />
-             </a>
-           ))}
-        </div>
-      </div>
-    );
-  };
-
-  const SpaceCard = ({ space, isJoined }: { space: Space, isJoined?: boolean }) => (
-    <div className="relative h-48 rounded-3xl overflow-hidden group cursor-pointer shadow-md">
-      <img src={space.image} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt={space.name} />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-5 flex flex-col justify-end">
-        <h3 className="font-bold text-xl text-white mb-1">{space.name}</h3>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-200 line-clamp-1 w-2/3">{space.description}</span>
-          <div className="flex gap-2">
-             <span className="text-xs font-bold bg-white/20 backdrop-blur-md text-white px-2.5 py-1 rounded-lg flex items-center gap-1">
-               <Users className="w-3 h-3" /> {(space.members / 1000).toFixed(1)}k
-             </span>
-             <button 
-                onClick={(e) => handleJoin(space.id, e)}
-                className={`w-7 h-6 rounded-lg flex items-center justify-center transition-colors ${isJoined ? 'bg-[#ff1744] text-white' : 'bg-white text-slate-900 hover:bg-gray-200'}`}
-             >
-                {isJoined ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+  return (
+    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950">
+       <AddSpaceModal isOpen={showAddSpace} onClose={() => setShowAddSpace(false)} />
+       
+       <div className="p-4 pt-6">
+          <div className="flex justify-between items-center mb-6">
+             <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-[Poppins]">Spaces</h1>
+             <button onClick={() => setShowAddSpace(true)} className="p-2 bg-[#ff1744]/10 text-[#ff1744] rounded-full hover:bg-[#ff1744] hover:text-white transition-colors">
+                <Plus className="w-6 h-6" />
              </button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
 
-  return (
-    <div className="h-full overflow-y-auto pb-24 p-4 bg-gray-50 dark:bg-slate-950 transition-colors">
-      <AddSpaceModal isOpen={showAddSpace} onClose={() => setShowAddSpace(false)} />
-
-      <div className="flex justify-between items-end mb-6">
-         <div>
-            <h2 className="text-2xl font-bold font-[Poppins] text-slate-900 dark:text-white">Spaces</h2>
-            <p className="text-gray-500 dark:text-slate-500 text-sm mt-1">Your digital HQ</p>
-         </div>
-         <button 
-           onClick={() => setShowAddSpace(true)}
-           className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 shadow-md flex items-center justify-center border border-gray-100 dark:border-slate-700 hover:bg-[#ff1744] hover:text-white group transition-colors"
-         >
-           <Plus className="w-6 h-6 text-[#ff1744] group-hover:text-white" />
-         </button>
-      </div>
-
-      <div className="flex gap-2 mb-6 bg-gray-200 dark:bg-slate-800 p-1 rounded-xl">
-        <button 
-          onClick={() => setActiveView('community')}
-          className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${activeView === 'community' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-slate-700'}`}
-        >
-          Communities
-        </button>
-        <button 
-          onClick={() => setActiveView('desk')}
-          className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${activeView === 'desk' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-slate-700'}`}
-        >
-          My Desk
-        </button>
-      </div>
-
-      {activeView === 'community' ? (
-        <div className="space-y-8 animate-in slide-in-from-left-4 duration-300">
-          
-          {joinedSpaces.length > 0 && (
-            <section>
-               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Joined Spaces</h3>
-               <div className="grid grid-cols-1 gap-4">
-                  {joinedSpaces.map(space => <SpaceCard key={space.id} space={space} isJoined={true} />)}
-               </div>
-            </section>
-          )}
-
-          <section>
-             <div className="flex items-center justify-between mb-3 px-1">
-               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Explore</h3>
-               <div className="flex items-center gap-1 text-[#ff1744] text-xs font-bold">
-                  <Globe className="w-3 h-3" /> Global
-               </div>
-             </div>
-             <div className="grid grid-cols-1 gap-5">
-               {discoverSpaces.map(space => <SpaceCard key={space.id} space={space} isJoined={false} />)}
-               {discoverSpaces.length === 0 && <p className="text-gray-400 text-sm italic">No new spaces to discover.</p>}
-             </div>
-          </section>
-
-        </div>
-      ) : (
-        <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-           <div className="flex justify-between items-center mb-2">
-             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">My Widgets</h3>
-             <Settings className="w-4 h-4 text-gray-400" />
-           </div>
-           
-           <div className="grid grid-cols-2 gap-4">
-             {workspaceWidgets.map(renderWidget)}
-             
-             {/* Add Widget Placeholder */}
-             <div className="col-span-1 min-h-[140px] border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#ff1744] hover:text-[#ff1744] cursor-pointer transition-colors">
-                <Plus className="w-6 h-6" />
-                <span className="text-xs font-bold">Add Widget</span>
-             </div>
-           </div>
-        </div>
-      )}
+          <div className="grid gap-6">
+             {spaces.map(space => (
+                <div key={space.id} className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-100 dark:border-slate-800 group cursor-pointer hover:shadow-md transition-shadow">
+                   <div className="h-40 bg-gray-200 dark:bg-slate-800 relative">
+                      <img src={space.image} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                      <div className="absolute bottom-0 left-0 p-5 w-full">
+                         <div className="flex justify-between items-end">
+                            <div>
+                               <h3 className="text-xl font-bold text-white mb-1">{space.name}</h3>
+                               <p className="text-white/80 text-sm line-clamp-1">{space.description}</p>
+                            </div>
+                            <span className="bg-white/20 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                               <Users className="w-3 h-3" /> {space.members}
+                            </span>
+                         </div>
+                      </div>
+                   </div>
+                   <div className="p-4 flex items-center justify-between">
+                      <div className="flex -space-x-2">
+                         {[1,2,3].map(i => (
+                            <img key={i} src={`https://picsum.photos/100/100?random=${i + parseInt(space.id.replace(/\D/g,''))}`} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900" />
+                         ))}
+                         <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                            +99
+                         </div>
+                      </div>
+                      <button 
+                         onClick={(e) => { e.stopPropagation(); dispatch({ type: 'JOIN_SPACE', payload: space.id }); }}
+                         className={`px-5 py-2 rounded-xl font-bold text-sm transition-all ${
+                            space.joined 
+                              ? 'bg-gray-100 dark:bg-slate-800 text-slate-500' 
+                              : 'bg-[#ff1744] text-white shadow-lg shadow-red-500/30'
+                         }`}
+                      >
+                         {space.joined ? 'Joined' : 'Join'}
+                      </button>
+                   </div>
+                </div>
+             ))}
+          </div>
+       </div>
     </div>
   );
 };
@@ -658,16 +472,9 @@ export const SpacesScreen: React.FC<{spaces: Space[]}> = ({ spaces }) => {
 // --- Sell Item Modal ---
 const SellItemModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const dispatch = useGlobalDispatch();
-  const [formData, setFormData] = useState({ 
-    title: '', 
-    price: '', 
-    image: '',
-    category: 'Electronics',
-    condition: 'New',
-    description: ''
-  });
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({ title: '', price: '', category: '', condition: 'New', description: '', image: '' });
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -675,290 +482,156 @@ const SellItemModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       try {
         const url = await storageService.uploadFile(e.target.files[0]);
         setFormData({ ...formData, image: url });
-      } catch (error) {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Image upload failed' } });
+      } catch (e) {
+         dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Upload failed' } });
       } finally {
         setUploading(false);
       }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title || !formData.price || !formData.image) return;
-
-    setLoading(true);
-    try {
-      const newProduct = await api.market.addProduct({
-        title: formData.title,
-        price: parseFloat(formData.price),
-        image: formData.image,
-        category: formData.category,
-        condition: formData.condition,
-        description: formData.description
-      });
-      dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Product listed successfully!' } });
-      onClose();
-      // Reset form
-      setFormData({ title: '', price: '', image: '', category: 'Electronics', condition: 'New', description: '' });
-    } catch (error) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to list product' } });
-    } finally {
-      setLoading(false);
-    }
+  const handleList = async () => {
+     if(!formData.title || !formData.price || !formData.image) return;
+     setLoading(true);
+     try {
+        const newProduct = await api.market.addProduct({ 
+           ...formData, 
+           price: parseFloat(formData.price) 
+        });
+        dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Item listed for sale!' } });
+        onClose();
+     } catch(e) {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to list item' } });
+     } finally {
+        setLoading(false);
+     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full max-w-sm h-[85vh] sm:h-auto sm:max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-300 p-6 flex flex-col">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white">Sell Item</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5 flex-1 overflow-y-auto pr-2">
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">Product Image</label>
-            <div className={`w-full aspect-video rounded-2xl border-2 border-dashed ${formData.image ? 'border-transparent' : 'border-gray-300 dark:border-slate-700'} bg-gray-50 dark:bg-slate-800 flex flex-col items-center justify-center relative overflow-hidden group`}>
-               {formData.image ? (
-                 <>
-                   <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
-                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-white font-bold text-sm">Change Image</p>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+       <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-xl font-bold text-slate-900 dark:text-white">List Item</h3>
+             <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+               <X className="w-5 h-5 text-slate-500" />
+             </button>
+          </div>
+          
+          <div className="space-y-4">
+             {/* Image Upload */}
+             <div className="w-full h-40 bg-gray-100 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-700 relative flex flex-col items-center justify-center overflow-hidden group">
+                {formData.image ? (
+                   <img src={formData.image} className="w-full h-full object-cover" />
+                ) : (
+                   <div className="flex flex-col items-center text-gray-400">
+                     {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-8 h-8 mb-2" />}
+                     <span className="text-xs font-bold">{uploading ? 'Uploading...' : 'Add Photos'}</span>
                    </div>
-                 </>
-               ) : (
-                 <div className="text-gray-400 flex flex-col items-center gap-2">
-                   {uploading ? <div className="w-8 h-8 border-4 border-[#ff1744]/30 border-t-[#ff1744] rounded-full animate-spin"></div> : <UploadCloud className="w-8 h-8" />}
-                   <span className="text-xs font-bold">{uploading ? 'Uploading...' : 'Tap to Upload'}</span>
-                 </div>
-               )}
-               <input 
-                 type="file" 
-                 accept="image/*" 
-                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                 onChange={handleImageUpload}
-                 disabled={uploading}
-               />
-            </div>
-          </div>
+                )}
+                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageUpload} disabled={uploading} />
+             </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">Title</label>
-            <input 
-              type="text" 
-              value={formData.title}
-              onChange={(e) => setFormData({...formData, title: e.target.value})}
-              placeholder="e.g. Vintage Camera"
-              className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold focus:outline-none focus:border-[#ff1744]" 
-            />
-          </div>
+             <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-400 uppercase">Title</label>
+                <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-xl font-bold border border-gray-200 dark:border-slate-700 focus:outline-none focus:border-[#ff1744]" placeholder="What are you selling?" />
+             </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-               <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
-               <select 
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-[#ff1744]"
-               >
-                  <option>Electronics</option>
-                  <option>Fashion</option>
-                  <option>Home</option>
-                  <option>Toys</option>
-                  <option>Sports</option>
-               </select>
-            </div>
-            <div className="space-y-2">
-               <label className="text-xs font-bold text-gray-400 uppercase">Condition</label>
-               <select 
-                  value={formData.condition}
-                  onChange={(e) => setFormData({...formData, condition: e.target.value})}
-                  className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-[#ff1744]"
-               >
-                  <option>New</option>
-                  <option>Like New</option>
-                  <option>Good</option>
-                  <option>Fair</option>
-               </select>
-            </div>
-          </div>
+             <div className="flex gap-4">
+                <div className="space-y-1 flex-1">
+                   <label className="text-xs font-bold text-gray-400 uppercase">Price</label>
+                   <div className="relative">
+                      <span className="absolute left-3 top-3 text-slate-500 font-bold">$</span>
+                      <input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full p-3 pl-7 bg-gray-50 dark:bg-slate-800 rounded-xl font-bold border border-gray-200 dark:border-slate-700 focus:outline-none focus:border-[#ff1744]" placeholder="0.00" />
+                   </div>
+                </div>
+                <div className="space-y-1 flex-1">
+                   <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
+                   <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-xl font-bold border border-gray-200 dark:border-slate-700 focus:outline-none focus:border-[#ff1744]">
+                      <option value="">Select</option>
+                      <option value="Electronics">Electronics</option>
+                      <option value="Fashion">Fashion</option>
+                      <option value="Home">Home</option>
+                   </select>
+                </div>
+             </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              placeholder="Describe your item..."
-              rows={3}
-              className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-[#ff1744] resize-none" 
-            />
-          </div>
+             <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-400 uppercase">Description</label>
+                <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={3} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-xl font-medium border border-gray-200 dark:border-slate-700 focus:outline-none focus:border-[#ff1744] resize-none" placeholder="Describe your item..." />
+             </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">Price ($)</label>
-            <div className="relative">
-               <span className="absolute left-4 top-4 text-slate-400 font-bold">$</span>
-               <input 
-                 type="number" 
-                 value={formData.price}
-                 onChange={(e) => setFormData({...formData, price: e.target.value})}
-                 placeholder="0.00"
-                 className="w-full p-4 pl-8 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold focus:outline-none focus:border-[#ff1744]" 
-               />
-            </div>
+             <button onClick={handleList} disabled={loading || !formData.title || !formData.price} className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 transition-all">
+                {loading ? 'Listing...' : 'List Item'}
+             </button>
           </div>
-
-          <button 
-            type="submit" 
-            disabled={loading || !formData.title || !formData.price || !formData.image}
-            className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-6"
-          >
-            {loading ? 'Listing Item...' : 'List Item'}
-          </button>
-        </form>
-      </div>
+       </div>
     </div>
   );
 };
 
 // --- Product Detail View ---
-const ProductDetailView: React.FC<{ productId: string, onBack: () => void }> = ({ productId, onBack }) => {
-  const { products } = useGlobalState();
+const ProductDetailView: React.FC<{ product: Product; onClose: () => void }> = ({ product, onClose }) => {
   const dispatch = useGlobalDispatch();
-  const product = products.find(p => p.id === productId);
-
-  if (!product) return <div className="p-4 text-center">Product not found</div>;
-
   return (
-    <div className="h-full bg-white dark:bg-slate-950 flex flex-col overflow-y-auto pb-24">
-       {/* Sticky Header */}
-       <div className="sticky top-0 z-20 flex justify-between items-center p-4 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-gray-100 dark:border-slate-800">
-         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-            <ChevronLeft className="w-6 h-6 text-slate-900 dark:text-white" />
-         </button>
-         <div className="flex gap-2">
-            <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
-              <Share2 className="w-5 h-5" />
-            </button>
-            <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400">
-              <Heart className="w-5 h-5" />
-            </button>
-         </div>
-       </div>
-
-       {/* Hero Image */}
-       <div className="relative w-full aspect-square md:aspect-video bg-gray-100 dark:bg-slate-900">
-          <img src={product.image} className="w-full h-full object-cover" alt={product.title} />
-          <div className="absolute bottom-4 left-4 bg-white/20 backdrop-blur-md px-3 py-1 rounded-lg border border-white/20">
-             <span className="text-white text-xs font-bold flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Verified Seller
-             </span>
-          </div>
-       </div>
-
-       {/* Info Section */}
-       <div className="p-6 space-y-6">
-          <div>
-            <div className="flex justify-between items-start mb-2">
-               <h1 className="text-2xl font-bold font-[Poppins] text-slate-900 dark:text-white leading-tight flex-1">{product.title}</h1>
-               <div className="flex flex-col items-end">
-                  <span className="text-2xl font-bold text-[#ff1744]">${product.price}</span>
-                  {/* Mock shipping info */}
-                  <span className="text-[10px] text-green-600 dark:text-green-400 font-bold flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded mt-1">
-                    <Truck className="w-3 h-3" /> Free Delivery
-                  </span>
-               </div>
-            </div>
-            
-            {/* Condition & Category Tags */}
-            <div className="flex gap-2 mb-2">
-                {product.category && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded font-bold">{product.category}</span>}
-                {product.condition && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded font-bold">{product.condition}</span>}
-            </div>
-
-            <div className="flex items-center gap-2 mt-2">
-               <div className="flex items-center text-orange-400">
-                  <Star className="w-4 h-4 fill-current" />
-                  <Star className="w-4 h-4 fill-current" />
-                  <Star className="w-4 h-4 fill-current" />
-                  <Star className="w-4 h-4 fill-current" />
-                  <Star className="w-4 h-4 fill-current" />
-               </div>
-               <span className="text-sm text-gray-500 dark:text-slate-400 font-medium">{product.rating} (124 reviews)</span>
-            </div>
-          </div>
-
-          {/* Seller Card */}
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
-             <img src={`https://picsum.photos/60/60?random=${product.id}seller`} className="w-12 h-12 rounded-full object-cover" alt={product.seller} />
-             <div className="flex-1">
-                <h4 className="font-bold text-slate-900 dark:text-white">{product.seller}</h4>
-                <p className="text-xs text-gray-500 dark:text-slate-400">Member since 2023 • 98% Positive</p>
-             </div>
-             <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                Contact
+    <div className="fixed inset-0 z-50 bg-white dark:bg-slate-950 overflow-y-auto animate-in slide-in-from-right duration-300">
+       <div className="relative h-[40vh]">
+          <img src={product.image} className="w-full h-full object-cover" />
+          <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-white/50 backdrop-blur-md rounded-full text-slate-900 hover:bg-white transition-colors">
+             <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="absolute top-4 right-4 flex gap-2">
+             <button className="p-2 bg-white/50 backdrop-blur-md rounded-full text-slate-900 hover:bg-white transition-colors">
+                <Share2 className="w-5 h-5" />
+             </button>
+             <button className="p-2 bg-white/50 backdrop-blur-md rounded-full text-slate-900 hover:bg-white transition-colors">
+                <Heart className="w-5 h-5" />
              </button>
           </div>
-
-          {/* Description */}
-          <div className="space-y-3">
-             <h3 className="font-bold text-lg text-slate-900 dark:text-white">Description</h3>
-             <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-line">
-               {product.description || `Experience premium quality with this ${product.title}. Meticulously designed for performance and style, it features top-tier materials that ensure durability. Perfect for daily use or as a gift.`}
-               <br/><br/>
-               • Authentic and verified
-               <br/>
-               • 30-day money-back guarantee
-             </p>
-          </div>
-
-          {/* Reviews Preview */}
-          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-             <h3 className="font-bold text-lg text-slate-900 dark:text-white">Customer Reviews</h3>
-             {[1, 2].map(i => (
-                <div key={i} className="space-y-2">
-                   <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-slate-700"></div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">User{i * 342}</span>
-                      <div className="flex text-orange-400 ml-auto">
-                        <Star className="w-3 h-3 fill-current" />
-                        <Star className="w-3 h-3 fill-current" />
-                        <Star className="w-3 h-3 fill-current" />
-                        <Star className="w-3 h-3 fill-current" />
-                        <Star className="w-3 h-3 fill-current" />
-                      </div>
-                   </div>
-                   <p className="text-xs text-gray-500 dark:text-slate-400 italic">"Absolutely amazing product! Arrived faster than expected and the quality is top notch."</p>
-                </div>
-             ))}
-             <button className="text-[#ff1744] text-xs font-bold hover:underline">View all 124 reviews</button>
-          </div>
        </div>
+       
+       <div className="-mt-6 bg-white dark:bg-slate-950 rounded-t-3xl relative p-6 min-h-[60vh]">
+          <div className="w-12 h-1 bg-gray-200 dark:bg-slate-800 rounded-full mx-auto mb-6"></div>
+          
+          <div className="flex justify-between items-start mb-4">
+             <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{product.title}</h1>
+                <p className="text-gray-500 dark:text-slate-400 text-sm">{product.category} • {product.condition}</p>
+             </div>
+             <div className="text-2xl font-bold text-[#ff1744]">${product.price}</div>
+          </div>
 
-       {/* Sticky Bottom Action Bar */}
-       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 flex gap-3 z-30 max-w-md mx-auto">
-          <button 
-             onClick={() => {
-                dispatch({ type: 'ADD_TO_CART', payload: product });
-                dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart' } });
-             }}
-             className="flex-1 py-3.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-sm hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
-          >
-             <ShoppingCart className="w-4 h-4" /> Add to Cart
-          </button>
-          <button 
-             onClick={() => dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Proceeding to checkout...' } })}
-             className="flex-1 py-3.5 rounded-xl bg-[#ff1744] text-white font-bold text-sm shadow-lg shadow-red-500/20 hover:bg-red-600 transition-colors"
-          >
-             Buy Now
-          </button>
+          <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 mb-6">
+             <div className="w-12 h-12 bg-gray-200 dark:bg-slate-800 rounded-full">
+                <img src={`https://ui-avatars.com/api/?name=${product.seller}`} className="w-full h-full rounded-full" />
+             </div>
+             <div className="flex-1">
+                <h4 className="font-bold text-slate-900 dark:text-white">{product.seller}</h4>
+                <div className="flex items-center gap-1">
+                   <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                   <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{product.rating}</span>
+                </div>
+             </div>
+             <button className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold">Message</button>
+          </div>
+
+          <h3 className="font-bold text-slate-900 dark:text-white mb-2">Description</h3>
+          <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm mb-8">{product.description}</p>
+
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-950 border-t border-gray-100 dark:border-slate-800 max-w-md mx-auto">
+             <button 
+                onClick={() => {
+                   dispatch({ type: 'ADD_TO_CART', payload: product });
+                   dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart' } });
+                   onClose();
+                }}
+                className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+             >
+                <ShoppingCart className="w-5 h-5" /> Add to Cart
+             </button>
+          </div>
        </div>
     </div>
   );
@@ -968,96 +641,23 @@ const ProductDetailView: React.FC<{ productId: string, onBack: () => void }> = (
 export const MarketplaceScreen: React.FC = () => {
   const { products, cart, selectedProductId } = useGlobalState();
   const dispatch = useGlobalDispatch();
-  const [showCart, setShowCart] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
-  
+  const [showCart, setShowCart] = useState(false);
+  const [filter, setFilter] = useState('All');
+
+  const selectedProduct = products.find(p => p.id === selectedProductId);
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  // If a product is selected, show details view
-  if (selectedProductId) {
-    return (
-      <ProductDetailView 
-        productId={selectedProductId} 
-        onBack={() => dispatch({ type: 'SELECT_PRODUCT', payload: null })} 
-      />
-    );
-  }
-
   return (
-    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950 transition-colors relative">
+    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950">
        <SellItemModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} />
-
-       <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 p-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
-          <h2 className="text-2xl font-bold font-[Poppins] text-[#ff1744]">Market</h2>
-          <div className="flex gap-3">
-            <button className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300 hover:bg-[#ff1744] hover:text-white transition-colors"><Search className="w-5 h-5" /></button>
-            <button 
-              onClick={() => setShowCart(true)} 
-              className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300 hover:bg-[#ff1744] hover:text-white transition-colors relative"
-              aria-label={`Cart, ${cart.length} items`}
-            >
-               <ShoppingCart className="w-5 h-5" />
-               {cart.length > 0 && (
-                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#ff1744] text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white dark:border-slate-900">
-                   {cart.length}
-                 </span>
-               )}
-            </button>
-          </div>
-       </div>
-
-       <div className="p-4 grid grid-cols-2 gap-4">
-         {products.map(product => (
-           <div 
-             key={product.id} 
-             className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all group flex flex-col cursor-pointer"
-             onClick={() => dispatch({ type: 'SELECT_PRODUCT', payload: product.id })}
-           >
-             <div className="relative h-40">
-               <img src={product.image} className="w-full h-full object-cover" alt={product.title} />
-               <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Like logic here
-                  }}
-                  className="absolute top-2 right-2 w-8 h-8 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-full flex items-center justify-center text-slate-900 dark:text-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#ff1744]"
-               >
-                 <Heart className="w-4 h-4" />
-               </button>
-             </div>
-             <div className="p-3 flex-1 flex flex-col">
-               <div className="flex justify-between items-start mb-1 gap-1">
-                 <h4 className="font-bold text-sm truncate text-slate-800 dark:text-slate-200">{product.title}</h4>
-                 <div className="flex items-center gap-0.5 text-[10px] text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">
-                   ★ {product.rating}
-                 </div>
-               </div>
-               <p className="font-bold text-[#ff1744] text-lg mb-2">${product.price}</p>
-               <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-gray-50 dark:border-slate-800 mb-3">
-                 <img src={`https://picsum.photos/50/50?random=${product.id}`} className="w-5 h-5 rounded-full object-cover" alt={product.seller} />
-                 <span className="text-xs text-gray-500 dark:text-slate-400 truncate font-medium">{product.seller}</span>
-               </div>
-               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch({ type: 'ADD_TO_CART', payload: product });
-                  dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Added ${product.title} to cart` } });
-                }}
-                className="w-full py-2 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-[#ff1744] dark:hover:bg-[#ff1744] transition-colors"
-               >
-                 Add to Cart
-               </button>
-             </div>
-           </div>
-         ))}
-       </div>
        
-       <button 
-         onClick={() => setShowSellModal(true)}
-         className="fixed bottom-24 right-6 bg-[#ff1744] text-white px-5 py-3.5 rounded-full font-bold shadow-xl shadow-red-500/30 flex items-center gap-2 z-10 hover:scale-105 transition-transform"
-       >
-         <Plus className="w-5 h-5" /> Sell Item
-       </button>
+       {selectedProduct && (
+          <ProductDetailView 
+             product={selectedProduct} 
+             onClose={() => dispatch({ type: 'SELECT_PRODUCT', payload: null })} 
+          />
+       )}
 
        {/* Cart Modal */}
        {showCart && (
@@ -1115,16 +715,76 @@ export const MarketplaceScreen: React.FC = () => {
             </div>
          </div>
        )}
+       
+       <div className="p-4 pt-6">
+          <div className="flex justify-between items-center mb-6">
+             <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-[Poppins]">Market</h1>
+             <div className="flex gap-2">
+                <button 
+                  onClick={() => setShowCart(true)} 
+                  className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-[#ff1744]"
+                >
+                   <ShoppingCart className="w-6 h-6" />
+                   {cart.length > 0 && <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#ff1744] rounded-full border border-white dark:border-slate-950"></div>}
+                </button>
+                <button onClick={() => setShowSellModal(true)} className="flex items-center gap-1 px-4 py-2 bg-[#ff1744] text-white rounded-full font-bold text-sm shadow-lg shadow-red-500/30 hover:bg-red-600 transition-colors">
+                   <Plus className="w-4 h-4" /> Sell
+                </button>
+             </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
+             {['All', 'Electronics', 'Fashion', 'Home', 'Vehicles', 'Toys'].map(cat => (
+                <button 
+                  key={cat}
+                  onClick={() => setFilter(cat)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                     filter === cat 
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' 
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-gray-100 dark:border-slate-800'
+                  }`}
+                >
+                   {cat}
+                </button>
+             ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             {products.filter(p => filter === 'All' || p.category === filter).map(product => (
+                <div 
+                   key={product.id} 
+                   onClick={() => dispatch({ type: 'SELECT_PRODUCT', payload: product.id })}
+                   className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-slate-800 group cursor-pointer hover:shadow-md transition-all"
+                >
+                   <div className="aspect-[4/5] bg-gray-100 dark:bg-slate-800 relative overflow-hidden">
+                      <img src={product.image} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                      <button className="absolute top-2 right-2 p-1.5 bg-white/50 backdrop-blur-md rounded-full text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white hover:text-[#ff1744]">
+                         <Heart className="w-4 h-4" />
+                      </button>
+                   </div>
+                   <div className="p-3">
+                      <div className="flex justify-between items-start mb-1">
+                         <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate flex-1">{product.title}</h3>
+                      </div>
+                      <div className="flex justify-between items-center">
+                         <span className="font-bold text-[#ff1744] text-sm">${product.price}</span>
+                         <span className="text-[10px] text-gray-400">{product.condition}</span>
+                      </div>
+                   </div>
+                </div>
+             ))}
+          </div>
+       </div>
     </div>
   );
 };
 
 // --- Enhanced Wallet & Profile Screen ---
 export const ProfileScreen: React.FC = () => {
-  const { currentUser: user, transactions, theme } = useGlobalState();
+  const { currentUser: user, transactions, theme, settings } = useGlobalState();
   const dispatch = useGlobalDispatch();
   const [activeTab, setActiveTab] = useState<'wallet' | 'account'>('wallet');
-  const [subSection, setSubSection] = useState<'none' | 'personal' | 'security' | 'appearance' | 'devices' | 'support'>('none');
+  const [subSection, setSubSection] = useState<'none' | 'personal' | 'security' | 'appearance' | 'devices' | 'support' | 'settings' | 'notifications' | 'privacy'>('none');
   
   // Converter State
   const [showConverter, setShowConverter] = useState(false);
@@ -1152,6 +812,9 @@ export const ProfileScreen: React.FC = () => {
   // Request Money Modal State
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestData, setRequestData] = useState({ recipient: '', amount: '' });
+
+  // Delete Account Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Personal Info Edit State
   const [editName, setEditName] = useState(user?.name || '');
@@ -1196,6 +859,18 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Clear everything
+    localStorage.clear();
+    dispatch({ type: 'LOGOUT' });
+    dispatch({ type: 'SET_LOADING', payload: false });
+    window.location.reload(); // Hard reload to clear any memory state
+  };
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setUploadingAvatar(true);
@@ -1229,6 +904,10 @@ export const ProfileScreen: React.FC = () => {
 
   const handleToggleTheme = (newTheme: 'light' | 'dark') => {
     dispatch({ type: 'SET_THEME', payload: newTheme });
+  };
+
+  const updateSetting = (section: keyof typeof settings, key: string, value: any) => {
+    dispatch({ type: 'UPDATE_SETTING', payload: { section, key, value } });
   };
 
   // Enhanced Chart Data
@@ -1355,6 +1034,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   // --- SUB SCREENS RENDERING ---
+  
   if (subSection === 'personal') {
      return (
        <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
@@ -1439,11 +1119,179 @@ export const ProfileScreen: React.FC = () => {
      );
   }
 
-  if (subSection === 'security') {
+  if (subSection === 'settings') {
     return (
       <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
          <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
            <button onClick={() => setSubSection('none')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
+              <ChevronLeft className="w-6 h-6" />
+           </button>
+           <h3 className="text-xl font-bold text-slate-900 dark:text-white">Settings</h3>
+         </div>
+         <div className="p-4 space-y-2 animate-in fade-in slide-in-from-right-4 duration-300">
+            {[
+              { id: 'notifications', icon: Bell, label: 'Notifications' },
+              { id: 'privacy', icon: Lock, label: 'Privacy & Data' },
+              { id: 'devices', icon: Smartphone, label: 'Linked Devices' },
+              { id: 'appearance', icon: Zap, label: 'App Appearance' },
+              { id: 'security', icon: Shield, label: 'Security' },
+              { id: 'support', icon: HelpCircle, label: 'Help & Support' },
+            ].map((item, i) => (
+              <button 
+                key={i} 
+                onClick={() => setSubSection(item.id as any)}
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-100 dark:border-slate-800 shadow-sm transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-slate-800 group-hover:bg-[#ff1744]/10 flex items-center justify-center transition-colors">
+                     <item.icon className={`w-5 h-5 text-slate-500 dark:text-slate-400 group-hover:text-[#ff1744]`} />
+                  </div>
+                  <span className="text-slate-700 dark:text-slate-200 font-bold">{item.label}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-600 group-hover:text-[#ff1744]" />
+              </button>
+            ))}
+         </div>
+      </div>
+    );
+  }
+
+  // --- NEW NOTIFICATIONS SCREEN ---
+  if (subSection === 'notifications') {
+    return (
+      <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
+         <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
+           <button onClick={() => setSubSection('settings')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
+              <ChevronLeft className="w-6 h-6" />
+           </button>
+           <h3 className="text-xl font-bold text-slate-900 dark:text-white">Notifications</h3>
+         </div>
+         <div className="p-4 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            {[
+              { id: 'push', title: 'Push Notifications', desc: 'Receive messages and alerts' },
+              { id: 'email', title: 'Email Notifications', desc: 'Get updates via email' },
+              { id: 'transactions', title: 'Transaction Alerts', desc: 'Notify on all payments' },
+              { id: 'marketing', title: 'Marketing', desc: 'Product updates and offers' },
+            ].map((item, i) => (
+               <div key={i} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                  <div>
+                     <h4 className="font-bold text-slate-900 dark:text-white">{item.title}</h4>
+                     <p className="text-xs text-gray-500 dark:text-slate-500">{item.desc}</p>
+                  </div>
+                  <div className="relative inline-flex items-center cursor-pointer">
+                     <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={settings.notifications[item.id as keyof typeof settings.notifications]}
+                        onChange={(e) => updateSetting('notifications', item.id, e.target.checked)}
+                     />
+                     <div className="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff1744]"></div>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+    );
+  }
+
+  // --- NEW PRIVACY SCREEN ---
+  if (subSection === 'privacy') {
+    return (
+      <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
+         {showDeleteModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+               <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl border border-gray-200 dark:border-slate-700">
+                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <AlertTriangle className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Delete Account?</h3>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">This action cannot be undone. All your data will be permanently removed.</p>
+                  <div className="flex gap-3">
+                     <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+                     <button onClick={handleDeleteAccount} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30">Delete</button>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
+           <button onClick={() => setSubSection('settings')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
+              <ChevronLeft className="w-6 h-6" />
+           </button>
+           <h3 className="text-xl font-bold text-slate-900 dark:text-white">Privacy</h3>
+         </div>
+         <div className="p-4 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+               <h4 className="font-bold text-slate-900 dark:text-white mb-4">Who can see my personal info</h4>
+               <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Last Seen</span>
+                     <select 
+                        value={settings.privacy.lastSeen}
+                        onChange={(e) => updateSetting('privacy', 'lastSeen', e.target.value)}
+                        className="bg-gray-50 dark:bg-slate-800 border-none text-xs font-bold text-slate-500 rounded-lg py-1 px-2 focus:ring-0"
+                     >
+                        <option>Everyone</option>
+                        <option>Contacts</option>
+                        <option>Nobody</option>
+                     </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Profile Photo</span>
+                     <select 
+                        value={settings.privacy.profilePhoto}
+                        onChange={(e) => updateSetting('privacy', 'profilePhoto', e.target.value)}
+                        className="bg-gray-50 dark:bg-slate-800 border-none text-xs font-bold text-slate-500 rounded-lg py-1 px-2 focus:ring-0"
+                     >
+                        <option>Everyone</option>
+                        <option>Contacts</option>
+                        <option>Nobody</option>
+                     </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">About</span>
+                     <select 
+                        value={settings.privacy.about}
+                        onChange={(e) => updateSetting('privacy', 'about', e.target.value)}
+                        className="bg-gray-50 dark:bg-slate-800 border-none text-xs font-bold text-slate-500 rounded-lg py-1 px-2 focus:ring-0"
+                     >
+                        <option>Everyone</option>
+                        <option>Contacts</option>
+                        <option>Nobody</option>
+                     </select>
+                  </div>
+               </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+               <div>
+                  <h4 className="font-bold text-slate-900 dark:text-white">Read Receipts</h4>
+                  <p className="text-xs text-gray-500 dark:text-slate-500">Show when you've read messages</p>
+               </div>
+               <div className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                     type="checkbox" 
+                     className="sr-only peer" 
+                     checked={settings.privacy.readReceipts}
+                     onChange={(e) => updateSetting('privacy', 'readReceipts', e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff1744]"></div>
+               </div>
+            </div>
+            
+            <button onClick={() => setShowDeleteModal(true)} className="w-full p-4 bg-red-50 dark:bg-red-900/10 text-red-500 dark:text-red-400 font-bold rounded-2xl border border-red-100 dark:border-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors">
+               Delete Account
+            </button>
+         </div>
+      </div>
+    );
+  }
+
+  if (subSection === 'security') {
+    return (
+      <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
+         <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
+           <button onClick={() => setSubSection('settings')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
               <ChevronLeft className="w-6 h-6" />
            </button>
            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Login & Security</h3>
@@ -1475,7 +1323,12 @@ export const ProfileScreen: React.FC = () => {
                   </div>
                </div>
                <div className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input 
+                     type="checkbox" 
+                     className="sr-only peer" 
+                     checked={settings.security.twoFactor}
+                     onChange={(e) => updateSetting('security', 'twoFactor', e.target.checked)}
+                  />
                   <div className="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff1744]"></div>
                </div>
             </div>
@@ -1491,7 +1344,12 @@ export const ProfileScreen: React.FC = () => {
                   </div>
                </div>
                <div className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input 
+                     type="checkbox" 
+                     className="sr-only peer" 
+                     checked={settings.security.biometric}
+                     onChange={(e) => updateSetting('security', 'biometric', e.target.checked)}
+                  />
                   <div className="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff1744]"></div>
                </div>
             </div>
@@ -1500,385 +1358,275 @@ export const ProfileScreen: React.FC = () => {
     );
   }
 
-  if (subSection === 'devices') {
-     return (
-       <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
-          <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
-            <button onClick={() => setSubSection('none')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
-               <ChevronLeft className="w-6 h-6" />
-            </button>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Linked Devices</h3>
-          </div>
-          <div className="p-4 space-y-6">
-             {/* Scan QR Area */}
-             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-[#ff1744]/10 rounded-full flex items-center justify-center mb-4">
-                   <QrCode className="w-8 h-8 text-[#ff1744]" />
-                </div>
-                <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-2">Link a Device</h4>
-                <p className="text-gray-500 dark:text-slate-400 text-sm mb-6 max-w-[200px]">Go to web.pingspace.app on your computer and scan the QR code.</p>
-                <button className="w-full py-3 bg-[#ff1744] text-white font-bold rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-600 transition-colors">
-                   Link a Device
-                </button>
-             </div>
+   return (
+    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950 transition-colors">
+      
+      {/* Send Money Modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
+              <div className="flex justify-between items-center mb-6">
+                 <h3 className="font-bold text-slate-900 dark:text-white text-lg">Send Money</h3>
+                 <button onClick={() => setShowSendModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+              </div>
 
-             {/* Device List */}
-             <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 ml-2">Active Sessions</h4>
-                <div className="space-y-3">
-                   <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                            <Smartphone className="w-5 h-5 text-green-500" />
-                         </div>
-                         <div>
-                            <h5 className="font-bold text-slate-900 dark:text-white text-sm">iPhone 14 Pro</h5>
-                            <p className="text-xs text-green-500 font-bold">This Device • Online</p>
-                         </div>
+              {sendStep === 'input' && (
+                <div className="space-y-4">
+                   <div>
+                      <label className="text-xs font-bold text-gray-400 uppercase">Recipient</label>
+                      <input 
+                        type="text" 
+                        value={sendData.recipient}
+                        onChange={(e) => setSendData({...sendData, recipient: e.target.value})}
+                        placeholder="@username or email"
+                        className="w-full mt-1 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl font-bold text-slate-900 dark:text-white border border-gray-100 dark:border-slate-700 focus:outline-none focus:border-[#ff1744]"
+                      />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-400 uppercase">Amount</label>
+                      <div className="relative mt-1">
+                         <span className="absolute left-4 top-3 text-xl font-bold text-gray-400">$</span>
+                         <input 
+                           type="number" 
+                           value={sendData.amount}
+                           onChange={(e) => setSendData({...sendData, amount: e.target.value})}
+                           placeholder="0.00"
+                           className="w-full p-3 pl-8 bg-gray-50 dark:bg-slate-800 rounded-xl font-bold text-slate-900 dark:text-white text-xl border border-gray-100 dark:border-slate-700 focus:outline-none focus:border-[#ff1744]"
+                         />
                       </div>
                    </div>
-
-                   <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                            <Laptop className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-                         </div>
-                         <div>
-                            <h5 className="font-bold text-slate-900 dark:text-white text-sm">MacBook Air</h5>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">Last active today at 10:30 AM</p>
-                         </div>
-                      </div>
-                      <button 
-                        onClick={() => dispatch({type: 'ADD_NOTIFICATION', payload: {type: 'success', message: 'Logged out from MacBook Air'}})}
-                        className="text-red-500 text-xs font-bold hover:underline"
-                      >
-                         Log Out
-                      </button>
-                   </div>
-
-                   <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
-                            <Monitor className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-                         </div>
-                         <div>
-                            <h5 className="font-bold text-slate-900 dark:text-white text-sm">Windows PC (Chrome)</h5>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">Last active yesterday</p>
-                         </div>
-                      </div>
-                      <button 
-                        onClick={() => dispatch({type: 'ADD_NOTIFICATION', payload: {type: 'success', message: 'Logged out from Windows PC'}})}
-                        className="text-red-500 text-xs font-bold hover:underline"
-                      >
-                         Log Out
-                      </button>
-                   </div>
+                   <button 
+                     onClick={() => { if(sendData.recipient && sendData.amount) setSendStep('security') }}
+                     className="w-full py-3 bg-[#ff1744] text-white font-bold rounded-xl mt-2 shadow-lg shadow-red-500/30"
+                   >
+                     Continue
+                   </button>
                 </div>
-             </div>
-          </div>
-       </div>
-     );
-  }
+              )}
 
-  if (subSection === 'appearance') {
-     return (
-       <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
-          <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
-            <button onClick={() => setSubSection('none')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
-               <ChevronLeft className="w-6 h-6" />
-            </button>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Appearance</h3>
-          </div>
-          <div className="p-4 space-y-4">
-             <h4 className="text-xs font-bold text-gray-400 uppercase ml-2">Theme</h4>
-             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
-                <button 
-                  onClick={() => handleToggleTheme('light')}
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800 border-b border-gray-100 dark:border-slate-800 transition-colors"
-                >
-                   <div className="flex items-center gap-3">
-                      <Sun className="w-5 h-5 text-orange-500" />
-                      <span className={`font-bold ${theme === 'light' ? 'text-slate-900' : 'text-slate-500 dark:text-slate-400'}`}>Light Mode</span>
-                   </div>
-                   {theme === 'light' && <Check className="w-5 h-5 text-[#ff1744]" />}
-                </button>
-                <button 
-                  onClick={() => handleToggleTheme('dark')}
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                   <div className="flex items-center gap-3">
-                      <Moon className="w-5 h-5 text-slate-400 dark:text-slate-200" />
-                      <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-400'}`}>Dark Mode</span>
-                   </div>
-                   {theme === 'dark' && <Check className="w-5 h-5 text-[#ff1744]" />}
-                </button>
-             </div>
-          </div>
-       </div>
-     );
-  }
+              {sendStep === 'security' && (
+                 <div className="text-center space-y-6">
+                    <p className="text-slate-600 dark:text-slate-300">Enter PIN to confirm sending <span className="font-bold text-slate-900 dark:text-white">${sendData.amount}</span> to <span className="font-bold text-slate-900 dark:text-white">{sendData.recipient}</span></p>
+                    
+                    <div className="flex justify-center gap-4 my-4">
+                       {[1,2,3,4].map((_, i) => (
+                          <div key={i} className={`w-4 h-4 rounded-full border-2 ${pin.length > i ? 'bg-[#ff1744] border-[#ff1744]' : 'border-gray-300 dark:border-slate-600'}`}></div>
+                       ))}
+                    </div>
 
-  if (subSection === 'support') {
-     return (
-       <div className="h-full flex flex-col bg-gray-50 dark:bg-slate-950">
-          <div className="p-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center gap-3 sticky top-0 z-10">
-            <button onClick={() => setSubSection('none')} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
-               <ChevronLeft className="w-6 h-6" />
-            </button>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Help & Support</h3>
-          </div>
-          <div className="p-4 space-y-6 overflow-y-auto">
-             
-             {/* Contact Support */}
-             <div className="bg-[#ff1744]/5 p-5 rounded-2xl border border-[#ff1744]/10 text-center">
-                <div className="w-12 h-12 bg-[#ff1744]/10 rounded-full flex items-center justify-center mx-auto mb-3 text-[#ff1744]">
-                   <MessageCircle className="w-6 h-6" />
-                </div>
-                <h4 className="font-bold text-slate-900 dark:text-white">Need help?</h4>
-                <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">Our support team is available 24/7 to assist you with any issues.</p>
-                <button className="px-6 py-2 bg-[#ff1744] text-white font-bold rounded-xl text-sm shadow-md hover:bg-red-600 transition-colors">
-                   Chat with Support
-                </button>
-             </div>
+                    <div className="grid grid-cols-3 gap-3">
+                       {[1,2,3,4,5,6,7,8,9].map(n => (
+                          <button key={n} onClick={() => handlePinInput(n.toString())} className="h-12 rounded-full bg-gray-100 dark:bg-slate-800 font-bold text-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white">{n}</button>
+                       ))}
+                       <div className="h-12 flex items-center justify-center">
+                          <button onClick={handleBiometric}><Fingerprint className="w-8 h-8 text-[#ff1744]" /></button>
+                       </div>
+                       <button onClick={() => handlePinInput('0')} className="h-12 rounded-full bg-gray-100 dark:bg-slate-800 font-bold text-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white">0</button>
+                       <button onClick={handleBackspace} className="h-12 rounded-full flex items-center justify-center text-slate-500 hover:text-red-500"><Delete className="w-6 h-6" /></button>
+                    </div>
 
-             {/* FAQs */}
-             <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 ml-2">Frequently Asked Questions</h4>
-                <div className="space-y-3">
-                   {[
-                      { q: "How do I verify my identity?", a: "Go to Personal Info > Identity Verification and upload your ID." },
-                      { q: "Are payments secure?", a: "Yes, we use bank-grade encryption and 2FA for all transactions." },
-                      { q: "How do I list an item?", a: "Go to the Market tab and tap the + button to start selling." },
-                      { q: "Can I use PingSpace on desktop?", a: "Yes! Use the Linked Devices section to scan a QR code on our website." }
-                   ].map((faq, i) => (
-                      <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm group cursor-pointer">
-                         <div className="flex justify-between items-center">
-                            <h5 className="font-bold text-sm text-slate-800 dark:text-slate-200">{faq.q}</h5>
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                         </div>
-                         <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 leading-relaxed hidden group-hover:block animate-in fade-in slide-in-from-top-1">
-                            {faq.a}
-                         </p>
-                      </div>
-                   ))}
-                </div>
-             </div>
+                    <button 
+                       onClick={verifyTransaction}
+                       disabled={pin.length !== 4}
+                       className="w-full py-3 bg-[#ff1744] text-white font-bold rounded-xl shadow-lg shadow-red-500/30 disabled:opacity-50 transition-all"
+                    >
+                       Confirm Payment
+                    </button>
+                 </div>
+              )}
 
-             <div className="text-center pt-4">
-                <p className="text-xs text-gray-400">App Version 2.4.0</p>
-             </div>
-          </div>
-       </div>
-     );
-  }
+              {sendStep === 'success' && (
+                 <div className="flex flex-col items-center justify-center py-6 text-center space-y-4">
+                    <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mb-2">
+                       <Check className="w-10 h-10 text-green-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Success!</h3>
+                    <p className="text-slate-600 dark:text-slate-400">You successfully sent <span className="font-bold">${sendData.amount}</span> to {sendData.recipient}.</p>
+                    <button onClick={() => setShowSendModal(false)} className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl mt-4">Done</button>
+                 </div>
+              )}
+           </div>
+        </div>
+      )}
 
-  return (
-    <div className="h-full overflow-y-auto pb-24 bg-gray-50 dark:bg-slate-950 transition-colors relative">
-      {/* Top Header */}
-      <div className="p-6 pb-2 bg-white dark:bg-slate-900 sticky top-0 z-10 border-b border-gray-100 dark:border-slate-800">
-        <div className="flex justify-between items-center mb-6">
-           <h2 className="text-2xl font-bold font-[Poppins] text-slate-900 dark:text-white">Profile</h2>
-           <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-             <Settings className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-           </button>
+      {/* Header Profile Card */}
+      <div className="bg-white dark:bg-slate-900 pb-2 rounded-b-[40px] shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 flex gap-3 z-10">
+          <button onClick={() => handleToggleTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
+             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          <button onClick={() => setSubSection('settings')} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
+             <Settings className="w-5 h-5" />
+          </button>
         </div>
         
-        {/* Profile Info Mini */}
-        <div className="flex items-center gap-4 mb-6">
-           <div className="relative">
-              <img src={user.avatar} className="w-16 h-16 rounded-full border-2 border-white dark:border-slate-800 shadow-md object-cover" alt="Profile" />
-              <button className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-800 p-1.5 rounded-full border border-gray-200 dark:border-slate-700 shadow-sm text-slate-700 dark:text-slate-300">
-                <QrCode className="w-3 h-3" />
+        <div className="pt-8 px-6 flex flex-col items-center relative z-10">
+           <div className="relative mb-3">
+              <div className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-lg overflow-hidden">
+                 <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
+              </div>
+              <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-slate-900 rounded-full"></div>
+           </div>
+           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{user.name}</h2>
+           <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">@alexnova • Standard Account</p>
+           
+           <div className="flex gap-2 p-1 bg-gray-100 dark:bg-slate-800 rounded-xl w-full max-w-xs mb-4">
+              <button 
+                onClick={() => setActiveTab('wallet')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'wallet' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                Wallet
+              </button>
+              <button 
+                onClick={() => setActiveTab('account')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'account' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                Account
               </button>
            </div>
-           <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">{user.name}</h3>
-              <p className="text-slate-500 text-sm">@pixel_pioneer</p>
-           </div>
-        </div>
-
-        {/* Custom Tabs */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
-           <button 
-             onClick={() => setActiveTab('wallet')} 
-             className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'wallet' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-           >
-             <Wallet className="w-4 h-4" /> Wallet
-           </button>
-           <button 
-             onClick={() => setActiveTab('account')} 
-             className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'account' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-           >
-             <UserIcon className="w-4 h-4" /> Account
-           </button>
         </div>
       </div>
 
       {activeTab === 'wallet' ? (
-        <div className="p-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          
-          {/* Virtual Card */}
-          <div className="relative w-full aspect-[1.586] rounded-3xl overflow-hidden shadow-2xl shadow-red-500/20 group perspective">
-             <div className="absolute inset-0 bg-gradient-to-br from-[#ff1744] to-[#d50000] p-6 flex flex-col justify-between text-white transition-transform transform group-hover:scale-105 duration-500">
-                <div className="flex justify-between items-start">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Wallet Balance Card */}
+          <div className="px-4 -mt-4 relative z-10 mb-6">
+             <div className="bg-[#1a1a1a] dark:bg-black rounded-3xl p-6 shadow-xl text-white overflow-hidden relative group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#ff1744] rounded-full blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity"></div>
+                
+                <div className="flex justify-between items-start mb-2">
                    <div>
-                      <p className="text-white/70 text-sm font-medium tracking-wider">Current Balance</p>
-                      <h3 className="text-3xl font-bold mt-1">$2,450.30</h3>
+                      <p className="text-white/60 text-xs font-bold uppercase tracking-wider mb-1">Total Balance</p>
+                      <h3 className="text-3xl font-bold font-mono">$2,450.80</h3>
                    </div>
-                   <CreditCard className="w-8 h-8 text-white/50" />
+                   <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md">
+                      <Wallet className="w-5 h-5 text-white" />
+                   </div>
                 </div>
                 
-                <div className="space-y-4">
-                   <div className="flex gap-3 items-center opacity-80">
-                      <div className="w-10 h-7 bg-yellow-400/90 rounded-md flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute w-full h-[1px] bg-black/10 top-2"></div>
-                        <div className="absolute w-full h-[1px] bg-black/10 bottom-2"></div>
+                <div className="flex gap-2 mb-6">
+                   <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded flex items-center gap-1 font-bold">
+                      <TrendingUp className="w-3 h-3" /> +12.5%
+                   </span>
+                   <span className="text-xs text-white/40">vs last month</span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                   {[
+                     { label: 'Send', icon: Send, action: 'Send' },
+                     { label: 'Top Up', icon: Plus, action: 'Top Up' },
+                     { label: 'Request', icon: ArrowDownLeft, action: 'Request' },
+                     { label: 'Withdraw', icon: ArrowUpRight, action: 'Withdraw' },
+                   ].map((btn) => (
+                      <div key={btn.label} className="flex flex-col items-center gap-2 cursor-pointer group/btn" onClick={() => handleSendAction(btn.action)}>
+                         <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center group-hover/btn:bg-[#ff1744] transition-colors">
+                            <btn.icon className="w-5 h-5 text-white" />
+                         </div>
+                         <span className="text-[10px] font-bold text-white/80">{btn.label}</span>
                       </div>
-                      <span className="font-mono text-lg tracking-widest">**** **** **** 4289</span>
-                   </div>
-                   <div className="flex justify-between items-end">
-                      <div>
-                         <p className="text-[10px] uppercase text-white/60 font-bold mb-0.5">Card Holder</p>
-                         <p className="font-medium tracking-wide text-sm">{user.name.toUpperCase()}</p>
-                      </div>
-                      <div>
-                         <p className="text-[10px] uppercase text-white/60 font-bold mb-0.5">Expires</p>
-                         <p className="font-medium tracking-wide text-sm">12/26</p>
-                      </div>
-                   </div>
+                   ))}
                 </div>
              </div>
-             {/* Gloss Effect */}
-             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="grid grid-cols-4 gap-4">
-             {[
-               { icon: Send, label: 'Send', bg: 'bg-blue-50 dark:bg-blue-900/20', color: 'text-blue-600 dark:text-blue-400' },
-               { icon: ArrowDownLeft, label: 'Request', bg: 'bg-green-50 dark:bg-green-900/20', color: 'text-green-600 dark:text-green-400' },
-               { icon: Plus, label: 'Top Up', bg: 'bg-orange-50 dark:bg-orange-900/20', color: 'text-orange-600 dark:text-orange-400' },
-               { icon: ArrowUpRight, label: 'Withdraw', bg: 'bg-purple-50 dark:bg-purple-900/20', color: 'text-purple-600 dark:text-purple-400' },
-             ].map((action, i) => (
-               <div key={i} onClick={() => handleSendAction(action.label)} className="flex flex-col items-center gap-2 cursor-pointer group">
-                  <div className={`w-14 h-14 ${action.bg} rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
-                     <action.icon className={`w-6 h-6 ${action.color}`} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{action.label}</span>
-               </div>
-             ))}
+          <div className="px-4 mb-6">
+             {/* Currency Converter Button */}
+             <button 
+                onClick={() => setShowConverter(true)}
+                className="w-full py-3 mb-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-center gap-2 text-slate-700 dark:text-slate-300 font-bold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+             >
+                <ArrowRightLeft className="w-5 h-5 text-[#ff1744]" /> Currency Converter
+             </button>
+
+             {/* Analytics / Chart */}
+             <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-slate-800">
+                <div className="flex justify-between items-center mb-4">
+                   <h3 className="font-bold text-slate-900 dark:text-white">Spending Activity</h3>
+                   <select className="bg-gray-50 dark:bg-slate-800 border-none text-xs font-bold text-slate-500 rounded-lg py-1 px-2 focus:ring-0">
+                      <option>This Week</option>
+                      <option>This Month</option>
+                   </select>
+                </div>
+                <div className="h-32 w-full">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData}>
+                         <defs>
+                            <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#ff1744" stopOpacity={0.3}/>
+                               <stop offset="95%" stopColor="#ff1744" stopOpacity={0}/>
+                            </linearGradient>
+                         </defs>
+                         <Tooltip 
+                            contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                            itemStyle={{ color: '#fff' }}
+                            cursor={{ stroke: '#ff1744', strokeWidth: 1, strokeDasharray: '3 3' }}
+                         />
+                         <Area type="monotone" dataKey="amt" stroke="#ff1744" strokeWidth={3} fillOpacity={1} fill="url(#colorAmt)" />
+                      </AreaChart>
+                   </ResponsiveContainer>
+                </div>
+             </div>
+          </div>
+
+          {/* Transactions List */}
+          <div className="px-4 mb-2">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-slate-900 dark:text-white">Recent Transactions</h3>
+                <button className="text-[#ff1744] text-xs font-bold">See All</button>
+             </div>
+             <div className="space-y-3">
+                {transactions.map(t => (
+                   <div key={t.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                      <div className="flex items-center gap-3">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            t.type === 'received' || t.type === 'deposit' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 
+                            'bg-red-50 dark:bg-red-900/20 text-red-500'
+                         }`}>
+                            {t.type === 'received' || t.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                         </div>
+                         <div>
+                            <h4 className="font-bold text-sm text-slate-900 dark:text-white">{t.entity}</h4>
+                            <p className="text-[10px] text-gray-500 dark:text-slate-500 uppercase font-bold">{t.type} • {t.date}</p>
+                         </div>
+                      </div>
+                      <span className={`font-bold ${
+                         t.type === 'received' || t.type === 'deposit' ? 'text-green-500' : 'text-slate-900 dark:text-white'
+                      }`}>
+                         {t.type === 'received' || t.type === 'deposit' ? '+' : '-'}${t.amount}
+                      </span>
+                   </div>
+                ))}
+                {transactions.length === 0 && <p className="text-center text-gray-400 text-sm py-4">No transactions yet.</p>}
+             </div>
           </div>
           
-          {/* Currency Converter Trigger */}
-          <button 
-            onClick={() => setShowConverter(true)}
-            className="w-full py-3 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-center gap-2 text-slate-700 dark:text-slate-300 font-bold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-          >
-            <ArrowRightLeft className="w-5 h-5 text-[#ff1744]" /> Currency Converter
-          </button>
-
-          {/* Spending Analysis */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm">
-             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><TrendingUp className="w-4 h-4 text-[#ff1744]" /> Spending</h3>
-                <select className="bg-gray-50 dark:bg-slate-800 border-none text-xs font-bold text-gray-500 rounded-lg py-1 px-2 focus:ring-0">
-                  <option>This Week</option>
-                  <option>Last Month</option>
-                </select>
-             </div>
-             <div className="h-40 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                   <AreaChart data={chartData}>
-                     <defs>
-                       <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
-                         <stop offset="5%" stopColor="#ff1744" stopOpacity={0.2}/>
-                         <stop offset="95%" stopColor="#ff1744" stopOpacity={0}/>
-                       </linearGradient>
-                     </defs>
-                     <Tooltip 
-                        contentStyle={{backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', border: 'none', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', color: theme === 'dark' ? '#fff' : '#0f172a', fontWeight: 'bold'}} 
-                        itemStyle={{color: '#ff1744'}}
-                     />
-                     <Area type="monotone" dataKey="balance" stroke="#ff1744" strokeWidth={3} fillOpacity={1} fill="url(#colorBal)" />
-                   </AreaChart>
-                </ResponsiveContainer>
-             </div>
-          </div>
-
-          {/* Savings Vaults */}
-          <div>
-            <div className="flex justify-between items-center mb-3 px-1">
-               <h3 className="font-bold text-slate-800 dark:text-white">Savings Goals</h3>
-               <Plus className="w-4 h-4 text-gray-400 cursor-pointer hover:text-[#ff1744]" />
-            </div>
-            <div className="space-y-3">
-               <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/20 rounded-xl flex items-center justify-center text-pink-500">
-                     <Target className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                     <div className="flex justify-between mb-1">
-                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">New Laptop</span>
-                        <span className="font-bold text-slate-900 dark:text-white text-sm">$1,200 / $2,000</span>
-                     </div>
-                     <div className="w-full h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-pink-500 w-[60%] rounded-full"></div>
-                     </div>
-                  </div>
-               </div>
-               <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center text-blue-500">
-                     <Compass className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                     <div className="flex justify-between mb-1">
-                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">Japan Trip</span>
-                        <span className="font-bold text-slate-900 dark:text-white text-sm">$850 / $3,500</span>
-                     </div>
-                     <div className="w-full h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 w-[24%] rounded-full"></div>
-                     </div>
-                  </div>
-               </div>
-            </div>
-          </div>
-
-          {/* Recent Transactions */}
-          <div>
-             <h3 className="font-bold text-slate-800 dark:text-white mb-3 px-1">Recent Activity</h3>
-             <div className="space-y-3">
-               {transactions.map(t => (
-                 <div key={t.id} className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center gap-3">
-                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          t.type === 'received' || t.type === 'deposit' ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400'
-                       }`}>
-                          {t.type === 'received' ? <ArrowDownLeft className="w-5 h-5" /> : 
-                           t.type === 'withdraw' ? <ArrowUpRight className="w-5 h-5" /> :
-                           t.type === 'deposit' ? <Plus className="w-5 h-5" /> : <Send className="w-5 h-5" />}
-                       </div>
-                       <div>
-                          <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">{t.entity}</p>
-                          <p className="text-xs text-gray-400 dark:text-slate-500 font-medium">{t.date}</p>
-                       </div>
-                    </div>
-                    <span className={`font-bold ${
-                       t.type === 'received' || t.type === 'deposit' ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'
-                    }`}>
-                       {t.type === 'received' || t.type === 'deposit' ? '+' : '-'}${t.amount}
-                    </span>
-                 </div>
-               ))}
+          {/* Utilities Grid */}
+          <div className="px-4 mt-6">
+             <h3 className="font-bold text-slate-900 dark:text-white mb-4">More Services</h3>
+             <div className="grid grid-cols-4 gap-3">
+                {[
+                   { icon: CreditCard, label: 'Cards', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+                   { icon: Scan, label: 'Scan', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
+                   { icon: Target, label: 'Goals', color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20' },
+                   { icon: Radio, label: 'Data', color: 'text-pink-500 bg-pink-50 dark:bg-pink-900/20' },
+                ].map((item) => (
+                   <div key={item.label} className="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${item.color}`}>
+                         <item.icon className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{item.label}</span>
+                   </div>
+                ))}
              </div>
           </div>
         </div>
       ) : (
-        <div className="p-4 space-y-2 animate-in fade-in slide-in-from-right-4 duration-500">
+        <div className="p-4 space-y-2 animate-in fade-in slide-in-from-right-4 duration-300">
+           {/* Account Tab Content */}
            {[
              { id: 'personal', icon: UserIcon, label: 'Personal Information' },
-             { id: 'security', icon: Shield, label: 'Login & Security' },
+             { id: 'settings', icon: Settings, label: 'Settings & Privacy' }, // Merged for simplicity in this view
              { id: 'devices', icon: Smartphone, label: 'Linked Devices' },
-             { id: 'appearance', icon: Zap, label: 'App Appearance' },
              { id: 'support', icon: HelpCircle, label: 'Help & Support' },
            ].map((item, i) => (
              <button 
@@ -1906,7 +1654,7 @@ export const ProfileScreen: React.FC = () => {
 
       {/* Currency Converter Modal */}
       {showConverter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
              <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">Currency Converter</h3>
@@ -2180,135 +1928,6 @@ export const ProfileScreen: React.FC = () => {
                </div>
             </div>
          </div>
-      )}
-
-      {/* Send Money Modal with PIN Security */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full max-w-sm h-[85vh] sm:h-auto overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
-             
-             {sendStep === 'input' && (
-               <div className="p-6 flex flex-col h-full">
-                  <div className="flex justify-between items-center mb-8">
-                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Send Money</h3>
-                     <button onClick={() => setShowSendModal(false)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700">
-                       <X className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-                     </button>
-                  </div>
-                  
-                  <div className="flex-1 space-y-6">
-                     <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Recipient</label>
-                        <div className="relative">
-                           <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
-                           <input 
-                             type="text"
-                             value={sendData.recipient}
-                             onChange={(e) => setSendData({...sendData, recipient: e.target.value})}
-                             placeholder="@username or phone"
-                             className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
-                           />
-                        </div>
-                     </div>
-
-                     <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Amount</label>
-                        <div className="relative">
-                           <span className="absolute left-4 top-3.5 text-2xl font-bold text-slate-400">$</span>
-                           <input 
-                             type="number"
-                             value={sendData.amount}
-                             onChange={(e) => setSendData({...sendData, amount: e.target.value})}
-                             placeholder="0.00"
-                             className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl py-3.5 pl-10 pr-4 text-3xl font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
-                           />
-                        </div>
-                        <p className="text-xs text-gray-400 mt-2 text-right">Available Balance: $2,450.30</p>
-                     </div>
-                  </div>
-
-                  <button 
-                    onClick={() => {
-                       if(sendData.recipient && sendData.amount) setSendStep('security');
-                    }}
-                    disabled={!sendData.recipient || !sendData.amount}
-                    className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-6"
-                  >
-                     Continue
-                  </button>
-               </div>
-             )}
-
-             {sendStep === 'security' && (
-               <div className="p-6 flex flex-col h-full bg-slate-900 text-white">
-                  <div className="flex justify-center mb-6">
-                     <div className="w-16 h-1 bg-slate-700 rounded-full"></div>
-                  </div>
-                  
-                  <div className="text-center mb-8">
-                     <h3 className="text-xl font-bold mb-2">Enter PIN</h3>
-                     <p className="text-slate-400 text-sm">Verify transfer of <span className="text-white font-bold">${sendData.amount}</span></p>
-                  </div>
-
-                  <div className="flex justify-center gap-4 mb-8">
-                     {[1, 2, 3, 4].map((_, i) => (
-                        <div key={i} className={`w-4 h-4 rounded-full border-2 border-slate-600 ${pin.length > i ? 'bg-[#ff1744] border-[#ff1744]' : 'bg-transparent'}`}></div>
-                     ))}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 max-w-xs mx-auto mb-6">
-                     {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                        <button 
-                          key={num} 
-                          onClick={() => handlePinInput(num.toString())}
-                          className="w-16 h-16 rounded-full bg-slate-800 text-white font-bold text-xl hover:bg-slate-700 transition-colors flex items-center justify-center"
-                        >
-                           {num}
-                        </button>
-                     ))}
-                     <button className="w-16 h-16 flex items-center justify-center" onClick={handleBiometric}>
-                        <Fingerprint className="w-8 h-8 text-[#ff1744]" />
-                     </button>
-                     <button 
-                       onClick={() => handlePinInput('0')}
-                       className="w-16 h-16 rounded-full bg-slate-800 text-white font-bold text-xl hover:bg-slate-700 transition-colors flex items-center justify-center"
-                     >
-                        0
-                     </button>
-                     <button onClick={handleBackspace} className="w-16 h-16 flex items-center justify-center text-slate-400 hover:text-white">
-                        <Delete className="w-6 h-6" />
-                     </button>
-                  </div>
-
-                  <button 
-                    onClick={verifyTransaction}
-                    disabled={pin.length !== 4}
-                    className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-auto"
-                  >
-                     Confirm Payment
-                  </button>
-               </div>
-             )}
-
-             {sendStep === 'success' && (
-                <div className="p-6 flex flex-col items-center justify-center h-full text-center">
-                   <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-300">
-                      <Check className="w-12 h-12 text-white" />
-                   </div>
-                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Transfer Successful!</h3>
-                   <p className="text-gray-500 dark:text-slate-400 mb-8">You sent <span className="font-bold text-slate-900 dark:text-white">${sendData.amount}</span> to {sendData.recipient}</p>
-                   
-                   <button 
-                     onClick={() => setShowSendModal(false)}
-                     className="w-full py-4 bg-slate-900 dark:bg-slate-800 text-white font-bold rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-700 transition-all"
-                   >
-                      Done
-                   </button>
-                </div>
-             )}
-
-           </div>
-        </div>
       )}
 
     </div>
