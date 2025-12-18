@@ -2,25 +2,23 @@ import { GoogleGenAI } from "@google/genai";
 import { SummaryResult } from "../types";
 
 // Initialize the client with the environment API key
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Fixed: Use only process.env.API_KEY as per guidelines
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const sendMessageToGemini = async (
   history: { role: 'user' | 'model'; parts: { text: string }[] }[],
   newMessage: string
 ): Promise<string> => {
   try {
-    if (!process.env.API_KEY) {
-      return "PingAI: API Key is missing. Please configure the environment.";
-    }
-
-    const model = 'gemini-2.5-flash';
+    // Fixed: Use recommended model 'gemini-3-flash-preview' for basic text tasks
+    const model = 'gemini-3-flash-preview';
     
     const response = await ai.models.generateContent({
       model: model,
       contents: [
         ...history, 
         { role: 'user', parts: [{ text: newMessage }] }
-      ] as any, 
+      ], 
       config: {
         systemInstruction: "You are PingAI, a helpful, futuristic AI assistant inside the PingSpace app. Keep responses concise, friendly, and formatted for a mobile chat interface.",
       }
@@ -35,8 +33,6 @@ export const sendMessageToGemini = async (
 
 export const generateChatSummary = async (messages: { sender: string; text: string }[]): Promise<SummaryResult | null> => {
   try {
-    if (!process.env.API_KEY) return null;
-
     const transcript = messages.map(m => `${m.sender}: ${m.text}`).join('\n');
     const prompt = `Analyze the following chat transcript. Extract a brief summary, key decisions made, and a list of action items/next steps. 
     
@@ -50,15 +46,16 @@ export const generateChatSummary = async (messages: { sender: string; text: stri
       "actionItems": ["..."]
     }`;
 
+    // Fixed: Use recommended model 'gemini-3-flash-preview' for summarization
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }] as any,
+      model: 'gemini-3-flash-preview',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json' }
     });
 
     const text = response.text;
     if (!text) return null;
-    return JSON.parse(text) as SummaryResult;
+    return JSON.parse(text.trim()) as SummaryResult;
   } catch (error) {
     console.error("Gemini Summary Error:", error);
     return null;

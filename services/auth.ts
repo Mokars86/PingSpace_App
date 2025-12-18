@@ -1,64 +1,63 @@
-
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  updateProfile,
-  User as FirebaseUser
-} from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { supabase } from "./supabase";
 import { User } from "../types";
 
 /**
  * Auth Service
- * Handles real Firebase Authentication
+ * Handles real Supabase Authentication
  */
 
-// Helper to map Firebase User to our App User type
-const mapUser = (fbUser: FirebaseUser, extraData?: any): User => {
+const mapUser = (sbUser: any, profile?: any): User => {
   return {
-    id: fbUser.uid,
-    name: fbUser.displayName || extraData?.name || 'User',
-    avatar: fbUser.photoURL || extraData?.avatar || `https://ui-avatars.com/api/?name=${fbUser.email}`,
-    isOnline: true, // In a real app, we'd check presence
-    status: 'Online'
+    id: sbUser.id,
+    name: profile?.name || sbUser.user_metadata?.full_name || 'User',
+    avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${sbUser.email}`,
+    isOnline: true,
+    status: profile?.status || 'Available'
   };
 };
 
 export const authService = {
-  // We no longer manually set session in localStorage, Firebase SDK handles this.
-  
   getToken: async () => {
-    return auth.currentUser ? await auth.currentUser.getIdToken() : null;
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
   },
 
-  getCurrentUser: (): User | null => {
-    const fbUser = auth.currentUser;
-    if (!fbUser) return null;
-    return mapUser(fbUser);
+  getCurrentUser: async (): Promise<User | null> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    
+    // Fetch profile extension
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    return mapUser(user, profile);
   },
 
-  isAuthenticated: () => {
-    return !!auth.currentUser;
+  isAuthenticated: async () => {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
   },
 
-  // Listener for React to know when auth state changes
   onAuthStateChanged: (callback: (user: User | null) => void) => {
-    return onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        // Fetch extra profile data from Firestore if needed
-        const userDoc = await getDoc(doc(db, "users", fbUser.uid));
-        const userData = userDoc.exists() ? userDoc.data() : {};
-        callback(mapUser(fbUser, userData));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        callback(mapUser(session.user, profile));
       } else {
         callback(null);
       }
     });
+    return () => subscription.unsubscribe();
   },
 
   logout: async () => {
-    await firebaseSignOut(auth);
+    await supabase.auth.signOut();
   }
 };
