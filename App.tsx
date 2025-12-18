@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff } from 'lucide-react';
 import { Tab, Message, ActiveCall } from './types';
@@ -144,19 +143,16 @@ const MainAppContent = () => {
     };
   }, [dispatch]);
 
-  // --- 3. INITIALIZATION & AUTH CHECK ---
+  // --- 3. INITIALIZATION & AUTH CHECK (Updated for Firebase) ---
   useEffect(() => {
-    const initApp = async () => {
-      // Small artificial delay for splash screen visibility
-      await new Promise(r => setTimeout(r, 2000));
-      
-      try {
-        if (authService.isAuthenticated()) {
-          const user = await api.auth.me();
-          dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-          
-          // Initialize Data
-          dispatch({ type: 'SET_LOADING', payload: true });
+    // Listen to Firebase Auth state
+    const unsubscribe = authService.onAuthStateChanged(async (user) => {
+      if (user) {
+        dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+        
+        // Initialize Data
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
           const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
             api.chats.list(),
             api.contacts.list(),
@@ -170,29 +166,27 @@ const MainAppContent = () => {
             type: 'SET_DATA', 
             payload: { chats, contacts, products, spaces, transactions, stories } 
           });
-          dispatch({ type: 'SET_LOADING', payload: false });
           
-          // Connect Socket
-          socketService.connect(authService.getToken()!);
-
-        } else {
-          dispatch({ type: 'SET_SCREEN', payload: 'login' });
+          // Connect Socket (Realtime Listeners)
+          socketService.connect('firebase_token');
+        } catch (e) {
+          console.error("Failed to load initial data", e);
+        } finally {
+          dispatch({ type: 'SET_LOADING', payload: false });
         }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-        authService.clearSession();
-        dispatch({ type: 'SET_SCREEN', payload: 'login' });
+      } else {
+        // Only set to login screen if we are not already on signup
+        if (state.screen !== 'signup') {
+           dispatch({ type: 'SET_SCREEN', payload: 'login' });
+        }
       }
-    };
+    });
 
-    if (state.screen === 'splash') {
-      initApp();
-    }
-  }, [state.screen, dispatch]);
+    return () => unsubscribe();
+  }, [dispatch]); // Removed state.screen dependency to prevent loop
 
   // --- 4. SOCKET LISTENERS ---
   useEffect(() => {
-    // Only set up listeners if we are logged in
     if (state.currentUser) {
        socketService.on('new_message', (data) => {
           dispatch({ 
@@ -218,15 +212,14 @@ const MainAppContent = () => {
   }, [state.notifications, dispatch]);
 
   const handleSendMessage = async (sessionId: string, text: string, type: Message['type'] = 'text', metadata?: any) => {
-    // Update UI immediately (Optimistic UI)
+    // Optimistic UI Update
     dispatch({ type: 'SEND_MESSAGE', payload: { sessionId, text, type, metadata } });
     
     try {
-      // Send to Backend
       await api.chats.sendMessage(sessionId, text, type, metadata);
-      // Emit via Socket
-      socketService.emit('send_message', { sessionId, text, type, metadata });
+      // No need to emit via socket, Firestore listener will pick up changes if we implement full real-time syncing in the hook
     } catch (e) {
+      console.error(e);
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to send message' } });
     }
   };
@@ -364,7 +357,7 @@ const MainAppContent = () => {
           </main>
 
           {/* Bottom Navigation */}
-          <nav className="h-[72px] bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-between items-center px-2 pb-2 fixed bottom-0 w-full max-w-md z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] transition-colors duration-300">
+          <nav className="h-[72px] bg-white dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 flex justify-between items-center px-2 pb-2 fixed bottom-0 w-full max-w-md z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] transition-colors duration-300">
             {[
               { id: Tab.CHATS, icon: MessageCircle, label: 'Chats' },
               { id: Tab.STATUS, icon: CircleDashed, label: 'Status' },

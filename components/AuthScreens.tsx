@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { useGlobalDispatch } from '../store';
@@ -89,7 +87,9 @@ export const LoginScreen: React.FC<AuthProps> = ({ onNavigate }) => {
       dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
       dispatch({ type: 'SET_LOADING', payload: false });
       
-      socketService.connect(authService.getToken()!);
+      const token = await authService.getToken();
+      if (token) socketService.connect(token);
+      
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Welcome back, ${user.name}!` } });
     } catch (error) {
@@ -117,7 +117,9 @@ export const LoginScreen: React.FC<AuthProps> = ({ onNavigate }) => {
       dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
       dispatch({ type: 'SET_LOADING', payload: false });
       
-      socketService.connect(authService.getToken()!);
+      const token = await authService.getToken();
+      if (token) socketService.connect(token);
+      
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Welcome, ${user.name}!` } });
     } catch (error) {
@@ -304,7 +306,9 @@ export const SignupScreen: React.FC<AuthProps> = ({ onNavigate }) => {
       dispatch({ type: 'SET_DATA', payload: { chats, contacts, products, spaces, transactions, stories } });
       dispatch({ type: 'SET_LOADING', payload: false });
       
-      socketService.connect(authService.getToken()!);
+      const token = await authService.getToken();
+      if (token) socketService.connect(token);
+      
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Account created successfully!' } });
     } catch (error) {
