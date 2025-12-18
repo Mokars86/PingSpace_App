@@ -1,77 +1,72 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { auth, db } from "./firebase";
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  updateProfile as updateFbProfile 
+} from "firebase/auth";
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  Timestamp,
+  arrayUnion
+} from "firebase/firestore";
 import { User, ChatSession, Transaction, Product, Space, Message, Story } from '../types';
 import { authService } from './auth';
 
 export const api = {
   auth: {
     login: async (email: string, password: string): Promise<User> => {
-      if (!isSupabaseConfigured()) throw new Error("Supabase is not configured. Please check your environment variables.");
-      
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      
-      const { data: profile, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-        
-      if (pError && pError.code !== 'PGRST116') console.error("Profile fetch error:", pError);
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      const profileDoc = await getDoc(doc(db, 'profiles', user.uid));
+      const profile = profileDoc.exists() ? profileDoc.data() : null;
 
       return {
-        id: data.user.id,
-        name: profile?.name || data.user.user_metadata?.full_name || 'User',
-        avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
+        id: user.uid,
+        name: profile?.name || user.displayName || 'User',
+        avatar: profile?.avatar || user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
         isOnline: true
       };
     },
     signup: async (form: any): Promise<User> => {
-      if (!isSupabaseConfigured()) throw new Error("Supabase URL/Key missing. Check environment variables.");
-
-      const { data, error } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: { 
-            full_name: form.name,
-            avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}&background=ff1744&color=fff`
-          }
-        }
+      const { user } = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      
+      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}&background=ff1744&color=fff`;
+      
+      await updateFbProfile(user, {
+        displayName: form.name,
+        photoURL: avatarUrl
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error("Signup failed: No user data returned.");
-
-      // Check if session exists (if email confirmation is disabled)
-      // If email confirmation is ENABLED, the user must click the link before they can 'sign in'
-      // and before we can reliably write to the 'profiles' table via the frontend (unless RLS allows it).
+      const newUserProfile = {
+        id: user.uid,
+        name: form.name,
+        avatar: avatarUrl,
+        status: 'Hey there! I am using PingSpace.',
+        email: form.email,
+        createdAt: Timestamp.now()
+      };
       
-      try {
-        const newUserProfile = {
-          id: data.user.id,
-          name: form.name,
-          avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}&background=ff1744&color=fff`,
-          status: 'Hey there! I am using PingSpace.'
-        };
-        
-        // We attempt to insert, but in production, a SQL trigger on 'auth.users' is the preferred way.
-        const { error: pError } = await supabase.from('profiles').upsert(newUserProfile);
-        if (pError) console.warn("Note: Profile creation via frontend failed (this is normal if Email Confirmation is ON). Error:", pError.message);
-      } catch (err) {
-        console.error("Profile insert exception:", err);
-      }
+      await setDoc(doc(db, 'profiles', user.uid), newUserProfile);
 
       return {
-        id: data.user.id,
+        id: user.uid,
         name: form.name,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}`,
+        avatar: avatarUrl,
         isOnline: true
       };
     },
     socialLogin: async (provider: any): Promise<User> => {
-      const { error } = await supabase.auth.signInWithOAuth({ provider });
-      if (error) throw error;
-      throw new Error("Redirecting to OAuth...");
+      // Basic implementation for demonstration
+      throw new Error("Social login not configured in this demo.");
     },
     me: async (): Promise<User> => {
       const user = await authService.getCurrentUser();
@@ -79,23 +74,17 @@ export const api = {
       return user;
     },
     updateProfile: async (updates: Partial<User>): Promise<User> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) throw new Error("No user");
       
-      const sbUpdates: any = {};
-      if (updates.name) sbUpdates.name = updates.name;
-      if (updates.avatar) sbUpdates.avatar_url = updates.avatar;
-      if (updates.status) sbUpdates.status = updates.status;
+      const fbUpdates: any = {};
+      if (updates.name) fbUpdates.name = updates.name;
+      if (updates.avatar) fbUpdates.avatar = updates.avatar;
+      if (updates.status) fbUpdates.status = updates.status;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(sbUpdates)
-        .eq('id', user.id)
-        .select()
-        .single();
-        
-      if (error) throw error;
-      return { ...updates, id: user.id, name: data.name, avatar: data.avatar_url } as User;
+      await updateDoc(doc(db, 'profiles', user.uid), fbUpdates);
+      
+      return { ...updates, id: user.uid } as User;
     },
     logout: async () => {
       await authService.logout();
@@ -104,142 +93,214 @@ export const api = {
 
   chats: {
     list: async (): Promise<ChatSession[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('chats')
-        .select(`
-          *,
-          messages(id, text, type, created_at, sender_id)
-        `)
-        .contains('members', [user.id])
-        .order('last_message_time', { ascending: false });
+      const q = query(
+        collection(db, 'chats'),
+        where('members', 'array-contains', user.uid),
+        orderBy('lastMessageTime', 'desc')
+      );
 
-      if (error) throw error;
+      const snapshot = await getDocs(q);
+      const chats: ChatSession[] = [];
 
-      return (data || []).map(chat => ({
-        id: chat.id,
-        participant: chat.is_group ? { id: chat.id, name: chat.name, avatar: chat.avatar } : { id: 'other', name: 'User', avatar: '' },
-        lastMessage: chat.last_message,
-        lastTime: chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString() : '',
-        unread: 0,
-        messages: chat.messages || [],
-        isGroup: chat.is_group,
-        disappearingMode: chat.disappearing_mode
-      }));
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        const messagesQ = query(collection(db, 'chats', d.id, 'messages'), orderBy('createdAt', 'asc'), limit(50));
+        const msgSnapshot = await getDocs(messagesQ);
+        const messages = msgSnapshot.docs.map(m => ({ id: m.id, ...m.data() } as Message));
+
+        chats.push({
+          id: d.id,
+          participant: data.isGroup ? { id: d.id, name: data.name, avatar: data.avatar } : { id: 'other', name: 'User', avatar: '' }, 
+          lastMessage: data.lastMessage || '',
+          lastTime: data.lastMessageTime ? data.lastMessageTime.toDate().toLocaleTimeString() : '',
+          unread: 0,
+          messages: messages,
+          isGroup: data.isGroup,
+          disappearingMode: data.disappearingMode
+        });
+      }
+
+      return chats;
     },
     sendMessage: async (chatId: string, text: string, type: Message['type'] = 'text', metadata?: any, replyTo?: any, expiresAt?: number): Promise<Message> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) throw new Error("Unauthorized");
 
-      const { data, error } = await supabase.from('messages').insert({
-        chat_id: chatId,
-        sender_id: user.id,
+      const newMessageData = {
+        senderId: user.uid,
         text,
         type,
-        metadata,
-        reply_to: replyTo,
-        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null
-      }).select().single();
+        metadata: metadata || {},
+        replyTo: replyTo || null,
+        expiresAt: expiresAt || null,
+        createdAt: Timestamp.now(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
 
-      if (error) throw error;
+      const msgRef = await addDoc(collection(db, 'chats', chatId, 'messages'), newMessageData);
+      
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessage: text,
+        lastMessageTime: Timestamp.now()
+      });
 
-      await supabase.from('chats').update({
-        last_message: text,
-        last_message_time: new Date().toISOString()
-      }).eq('id', chatId);
-
-      return data;
+      return { id: msgRef.id, ...newMessageData } as unknown as Message;
     },
     createGroup: async (name: string, participantIds: string[]): Promise<ChatSession> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const allMembers = [user!.id, ...participantIds];
+      const user = auth.currentUser;
+      if (!user) throw new Error("Auth required");
       
-      const { data, error } = await supabase.from('chats').insert({
+      const allMembers = [user.uid, ...participantIds];
+      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`;
+      
+      const chatData = {
         name,
-        is_group: true,
+        isGroup: true,
         members: allMembers,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`
-      }).select().single();
+        avatar: avatarUrl,
+        lastMessage: '',
+        lastMessageTime: Timestamp.now(),
+        createdAt: Timestamp.now()
+      };
 
-      if (error) throw error;
-      return { id: data.id, participant: { id: data.id, name, avatar: data.avatar }, messages: [], lastMessage: '', lastTime: '', unread: 0, isGroup: true };
+      const chatRef = await addDoc(collection(db, 'chats'), chatData);
+      
+      return { 
+        id: chatRef.id, 
+        participant: { id: chatRef.id, name, avatar: avatarUrl }, 
+        messages: [], 
+        lastMessage: '', 
+        lastTime: 'Now', 
+        unread: 0, 
+        isGroup: true 
+      };
     }
   },
 
   contacts: {
     list: async (): Promise<User[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data } = await supabase.from('profiles').select('*').neq('id', user?.id);
-      return (data || []).map(p => ({ id: p.id, name: p.name, avatar: p.avatar_url, status: p.status, isOnline: true }));
+      const user = auth.currentUser;
+      const q = query(collection(db, 'profiles'), where('id', '!=', user?.uid || ''));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => {
+        const data = d.data();
+        return { 
+          id: d.id, 
+          name: data.name, 
+          avatar: data.avatar, 
+          status: data.status, 
+          isOnline: true 
+        };
+      });
     }
   },
 
   wallet: {
     getTransactions: async (): Promise<Transaction[]> => {
-      const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
-      return (data || []).map(t => ({ id: t.id, type: t.type, amount: t.amount, date: t.created_at, entity: t.entity }));
+      const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
     },
     transfer: async (recipient: string, amount: number) => {
-      await supabase.from('transactions').insert({ type: 'sent', amount, entity: recipient });
+      await addDoc(collection(db, 'transactions'), {
+        type: 'sent',
+        amount,
+        entity: recipient,
+        createdAt: Timestamp.now(),
+        date: new Date().toLocaleDateString()
+      });
     },
     withdraw: async (amount: number, method: string) => {
-      await supabase.from('transactions').insert({ type: 'withdraw', amount, entity: method });
+      const tx = {
+        type: 'withdraw',
+        amount,
+        entity: method,
+        createdAt: Timestamp.now(),
+        date: new Date().toLocaleDateString()
+      };
+      const docRef = await addDoc(collection(db, 'transactions'), tx);
+      return { id: docRef.id, ...tx } as any;
     },
     deposit: async (amount: number, method: string) => {
-       const { data, error } = await supabase.from('transactions').insert({ type: 'deposit', amount, entity: method }).select().single();
-       if (error) throw error;
-       return data;
+       const tx = {
+         type: 'deposit',
+         amount,
+         entity: method,
+         createdAt: Timestamp.now(),
+         date: new Date().toLocaleDateString()
+       };
+       const docRef = await addDoc(collection(db, 'transactions'), tx);
+       return { id: docRef.id, ...tx } as any;
     }
   },
 
   market: {
     getProducts: async (): Promise<Product[]> => {
-      const { data } = await supabase.from('products').select('*');
-      return data || [];
+      const snapshot = await getDocs(collection(db, 'products'));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
     },
     addProduct: async (productData: Partial<Product>) => {
-      const { data, error } = await supabase.from('products').insert(productData).select().single();
-      if (error) throw error;
-      return data;
+      const docRef = await addDoc(collection(db, 'products'), productData);
+      return { id: docRef.id, ...productData } as Product;
     }
   },
   
   spaces: {
     list: async (): Promise<Space[]> => {
-      const { data } = await supabase.from('spaces').select('*');
-      return data || [];
+      const snapshot = await getDocs(collection(db, 'spaces'));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Space));
     },
     create: async (data: Partial<Space>) => {
-      const { data: res, error } = await supabase.from('spaces').insert(data).select().single();
-      if (error) throw error;
-      return res;
+      const docRef = await addDoc(collection(db, 'spaces'), {
+        ...data,
+        members: 1,
+        createdAt: Timestamp.now()
+      });
+      return { id: docRef.id, ...data, members: 1 } as Space;
     },
     join: async (id: string) => {
-      // Junction logic here
+      await updateDoc(doc(db, 'spaces', id), {
+        members: Timestamp.now() // Mocking membership update
+      });
     }
   },
 
   stories: {
     list: async (): Promise<Story[]> => {
-      const { data } = await supabase.from('stories').select('*, profiles(name, avatar_url)');
-      return (data || []).map(s => ({
-        id: s.id,
-        userId: s.user_id,
-        userName: s.profiles?.name || 'User',
-        userAvatar: s.profiles?.avatar_url || '',
-        image: s.image_url,
-        timestamp: s.created_at,
-        viewed: false,
-        caption: s.caption
-      }));
+       const snapshot = await getDocs(query(collection(db, 'stories'), orderBy('createdAt', 'desc')));
+       return snapshot.docs.map(d => {
+         const data = d.data();
+         return {
+           id: d.id,
+           userId: data.userId,
+           userName: data.userName,
+           userAvatar: data.userAvatar,
+           image: data.image,
+           timestamp: 'Today',
+           viewed: false,
+           caption: data.caption
+         };
+       });
     },
     addStory: async (image: string, caption?: string) => {
-       const { data: { user } } = await supabase.auth.getUser();
-       const { data, error } = await supabase.from('stories').insert({ user_id: user?.id, image_url: image, caption }).select().single();
-       if (error) throw error;
-       return data;
+       const user = auth.currentUser;
+       const profileDoc = await getDoc(doc(db, 'profiles', user?.uid || ''));
+       const profile = profileDoc.exists() ? profileDoc.data() : null;
+
+       const storyData = {
+         userId: user?.uid,
+         userName: profile?.name || user?.displayName,
+         userAvatar: profile?.avatar || user?.photoURL,
+         image: image,
+         caption: caption || '',
+         createdAt: Timestamp.now()
+       };
+
+       const docRef = await addDoc(collection(db, 'stories'), storyData);
+       return { id: docRef.id, ...storyData, timestamp: 'Now', viewed: false } as any;
     }
   }
 };

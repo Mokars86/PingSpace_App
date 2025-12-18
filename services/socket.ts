@@ -1,42 +1,44 @@
-import { supabase } from "./supabase";
+import { db } from "./firebase";
+import { collectionGroup, onSnapshot, query, where } from "firebase/firestore";
 
 /**
- * Real-time Service (Supabase Realtime)
- * Replaces Firestore listeners with Postgres Change Streams
+ * Real-time Service (Firebase Firestore Listeners)
+ * Replaces Socket with Firestore Snapshot listeners
  */
 
 type Listener = (data: any) => void;
 
 class RealtimeService {
   private listeners: Record<string, Listener[]> = {};
-  private channel: any = null;
+  private unsubscribers: (() => void)[] = [];
   public connected: boolean = false;
 
   connect(token: string) {
-    if (this.channel) return;
+    if (this.connected) return;
 
-    this.channel = supabase
-      .channel('public_room')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        this.emit('new_message', {
-          sender: 'New Message',
-          text: payload.new.text,
-          chatId: payload.new.chat_id
-        });
-      })
-      .on('broadcast', { event: 'typing' }, (payload) => {
-        this.emit('typing_status', payload.payload);
-      })
-      .subscribe((status) => {
-        this.connected = status === 'SUBSCRIBED';
+    // Listen for global message updates across all chats
+    const q = query(collectionGroup(db, 'messages'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const data = change.doc.data();
+          this.emit('new_message', {
+            sender: data.senderId,
+            text: data.text,
+            chatId: change.doc.ref.parent.parent?.id
+          });
+        }
       });
+    });
+
+    this.unsubscribers.push(unsub);
+    this.connected = true;
   }
 
   disconnect() {
-    if (this.channel) {
-      supabase.removeChannel(this.channel);
-      this.channel = null;
-    }
+    this.unsubscribers.forEach(un => un());
+    this.unsubscribers = [];
+    this.connected = false;
   }
 
   on(event: string, callback: Listener) {
@@ -50,14 +52,8 @@ class RealtimeService {
   }
 
   emit(event: string, payload: any) {
-    if (event === 'typing_status' && this.channel) {
-       this.channel.send({
-         type: 'broadcast',
-         event: 'typing',
-         payload
-       });
-    }
-
+    // In Firestore implementation, many "emits" (like typing) 
+    // would be handled by writing to a dedicated 'presence' or 'typing' doc.
     if (this.listeners[event]) {
       this.listeners[event].forEach(cb => cb(payload));
     }

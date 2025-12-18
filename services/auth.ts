@@ -1,16 +1,18 @@
-import { supabase } from "./supabase";
+import { auth, db } from "./firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { User } from "../types";
 
 /**
  * Auth Service
- * Handles real Supabase Authentication
+ * Handles Firebase Authentication
  */
 
-const mapUser = (sbUser: any, profile?: any): User => {
+const mapUser = (fbUser: any, profile?: any): User => {
   return {
-    id: sbUser.id,
-    name: profile?.name || sbUser.user_metadata?.full_name || 'User',
-    avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${sbUser.email}`,
+    id: fbUser.uid,
+    name: profile?.name || fbUser.displayName || 'User',
+    avatar: profile?.avatar || fbUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(fbUser.email || 'User')}`,
     isOnline: true,
     status: profile?.status || 'Available'
   };
@@ -18,46 +20,38 @@ const mapUser = (sbUser: any, profile?: any): User => {
 
 export const authService = {
   getToken: async () => {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token || null;
+    const user = auth.currentUser;
+    return user ? await user.getIdToken() : null;
   },
 
   getCurrentUser: async (): Promise<User | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user) return null;
     
     // Fetch profile extension
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const profileDoc = await getDoc(doc(db, 'profiles', user.uid));
+    const profile = profileDoc.exists() ? profileDoc.data() : null;
 
     return mapUser(user, profile);
   },
 
   isAuthenticated: async () => {
-    const { data } = await supabase.auth.getSession();
-    return !!data.session;
+    return !!auth.currentUser;
   },
 
   onAuthStateChanged: (callback: (user: User | null) => void) => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        callback(mapUser(session.user, profile));
+    return onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const profileDoc = await getDoc(doc(db, 'profiles', fbUser.uid));
+        const profile = profileDoc.exists() ? profileDoc.data() : null;
+        callback(mapUser(fbUser, profile));
       } else {
         callback(null);
       }
     });
-    return () => subscription.unsubscribe();
   },
 
   logout: async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
   }
 };

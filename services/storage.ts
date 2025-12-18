@@ -1,28 +1,19 @@
-import { supabase } from "./supabase";
+import { storage } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
- * Supabase Storage Service
- * Handles uploading media to Supabase Storage Buckets.
+ * Firebase Storage Service
+ * Handles uploading media to Firebase Storage Buckets.
  */
 
 export const storageService = {
   uploadFile: async (file: File): Promise<string> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('pingspace_media')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      throw uploadError;
-    }
-
-    const { data } = supabase.storage
-      .from('pingspace_media')
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
+    const fileName = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `pingspace/${fileName}`);
+    
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
+    
+    return downloadURL;
   }
 };
