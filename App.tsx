@@ -1,31 +1,30 @@
 
 import React, { useEffect, useState } from 'react';
-import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff } from 'lucide-react';
+import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff, Plus, Tag, Wallet as WalletIcon } from 'lucide-react';
 import { Tab, Message, ActiveCall } from './types';
 import { ChatList, ChatWindow } from './components/ChatFeatures';
 import { StatusScreen, DiscoveryScreen, SpacesScreen, MarketplaceScreen, ProfileScreen } from './components/TabScreens';
-import { SplashScreen, LoginScreen, SignupScreen } from './components/AuthScreens';
+import { SplashScreen, LoginScreen, SignupScreen, ForgotPasswordScreen } from './components/AuthScreens';
 import { GlobalProvider, useGlobalState, useGlobalDispatch } from './store';
 import { api } from './services/api';
 import { authService } from './services/auth';
 import { socketService } from './services/socket';
+import { notificationService } from './services/notificationService';
 
 // --- CALL OVERLAY COMPONENT ---
 const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
   const dispatch = useGlobalDispatch();
   const [duration, setDuration] = useState(0);
 
-  // Auto-connect simulation
   useEffect(() => {
     if (call.status === 'ringing') {
       const timer = setTimeout(() => {
         dispatch({ type: 'SET_CALL_STATUS', payload: 'connected' });
-      }, 3000); // Connect after 3 seconds
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [call.status, dispatch]);
 
-  // Duration timer
   useEffect(() => {
     if (call.status === 'connected') {
       const timer = setInterval(() => {
@@ -43,8 +42,6 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
-      
-      {/* Background/Video Feed */}
       <div className="absolute inset-0 bg-slate-800">
          {call.type === 'video' && !call.isVideoOff ? (
             <img 
@@ -59,8 +56,6 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
                </div>
             </div>
          )}
-         
-         {/* Self View (Mock) */}
          {call.type === 'video' && call.status === 'connected' && (
             <div className="absolute top-4 right-4 w-28 h-36 bg-black rounded-xl overflow-hidden border-2 border-white/20 shadow-xl">
                <img src="https://picsum.photos/200/300" className="w-full h-full object-cover" alt="Me" />
@@ -68,7 +63,6 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
          )}
       </div>
 
-      {/* Call Info */}
       <div className="absolute top-12 flex flex-col items-center z-10 w-full">
          <div className="w-24 h-24 rounded-full border-4 border-white/10 p-1 mb-4 shadow-2xl">
             <img src={call.participant.avatar} className="w-full h-full rounded-full object-cover" alt={call.participant.name} />
@@ -79,7 +73,6 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
          </p>
       </div>
 
-      {/* Controls */}
       <div className="absolute bottom-12 w-full max-w-sm px-8 z-10">
          <div className="flex items-center justify-between bg-black/20 backdrop-blur-md rounded-3xl p-4 border border-white/10">
             <button 
@@ -88,14 +81,12 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
             >
                {call.isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
-            
             <button 
               onClick={() => dispatch({type: 'END_CALL'})}
               className="p-5 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/40 hover:scale-110 transition-transform"
             >
                <PhoneOff className="w-8 h-8" />
             </button>
-
             {call.type === 'video' ? (
                <button 
                  onClick={() => dispatch({type: 'TOGGLE_CALL_VIDEO'})}
@@ -114,7 +105,6 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
   );
 };
 
-// --- MAIN CONTENT COMPONENT ---
 const MainAppContent = () => {
   const state = useGlobalState();
   const dispatch = useGlobalDispatch();
@@ -133,73 +123,112 @@ const MainAppContent = () => {
   useEffect(() => {
     const handleOnline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: true });
     const handleOffline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: false });
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, [dispatch]);
 
-  // --- 3. INITIALIZATION & AUTH CHECK (Updated for Firebase) ---
+  // --- 3. INITIALIZATION & AUTH CHECK ---
   useEffect(() => {
-    // Listen to Firebase Auth state
-    const unsubscribe = authService.onAuthStateChanged(async (user) => {
-      if (user) {
-        dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-        
-        // Initialize Data
-        dispatch({ type: 'SET_LOADING', payload: true });
-        try {
-          const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
-            api.chats.list(),
-            api.contacts.list(),
-            api.market.getProducts(),
-            api.spaces.list(),
-            api.wallet.getTransactions(),
-            api.stories.list()
-          ]);
-          
-          dispatch({ 
-            type: 'SET_DATA', 
-            payload: { chats, contacts, products, spaces, transactions, stories } 
-          });
-          
-          // Connect Socket (Realtime Listeners)
-          socketService.connect('firebase_token');
-        } catch (e) {
-          console.error("Failed to load initial data", e);
-        } finally {
-          dispatch({ type: 'SET_LOADING', payload: false });
-        }
-      } else {
-        // Only set to login screen if we are not already on signup
-        if (state.screen !== 'signup') {
-           dispatch({ type: 'SET_SCREEN', payload: 'login' });
-        }
+    const loadAppData = async (user: any) => {
+      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+      dispatch({ type: 'SET_LOADING', payload: true });
+      try {
+        const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
+          api.chats.list(),
+          api.contacts.list(),
+          api.market.getProducts(),
+          api.spaces.list(),
+          api.wallet.getTransactions(),
+          api.stories.list()
+        ]);
+        dispatch({ 
+          type: 'SET_DATA', 
+          payload: { chats, contacts, products, spaces, transactions, stories } 
+        });
+        const token = await authService.getToken();
+        if (token) socketService.connect(token);
+      } catch (e: any) {
+        console.error("Failed to load initial data:", e.message || e);
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, [dispatch]); // Removed state.screen dependency to prevent loop
+    const initAuth = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user) {
+          await loadAppData(user);
+        } else {
+          dispatch({ type: 'SET_SCREEN', payload: 'login' });
+        }
+      } catch (e: any) {
+        console.error("Auth init error:", e.message || e);
+        dispatch({ type: 'SET_SCREEN', payload: 'login' });
+      }
 
-  // --- 4. SOCKET LISTENERS ---
+      const unsubscribe = authService.onAuthStateChanged(async (user) => {
+        if (user) {
+          loadAppData(user);
+        } else {
+          dispatch({ type: 'SET_SCREEN', payload: 'login' });
+        }
+      });
+      return unsubscribe;
+    };
+
+    let unsubscribeFn: (() => void) | undefined;
+    initAuth().then(fn => unsubscribeFn = fn);
+
+    return () => {
+      if (unsubscribeFn) unsubscribeFn();
+    };
+  }, [dispatch]);
+
+  // --- 4. REALTIME LISTENERS & NOTIFICATIONS ---
   useEffect(() => {
     if (state.currentUser) {
-       socketService.on('new_message', (data) => {
-          dispatch({ 
-            type: 'ADD_NOTIFICATION', 
-            payload: { type: 'info', message: `New message from ${data.sender}` } 
-          });
-       });
+       const handleNewMessage = (data: any) => {
+          if (data.senderId !== state.currentUser?.id) {
+             const message: Message = {
+                id: data.id,
+                senderId: data.senderId,
+                text: data.text,
+                type: data.type || 'text',
+                timestamp: new Date(data.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                createdAt: data.createdAt,
+                metadata: data.metadata
+             };
 
+             dispatch({ 
+                type: 'RECEIVE_MESSAGE', 
+                payload: { sessionId: data.chatId, message } 
+             });
+
+             dispatch({ 
+               type: 'ADD_NOTIFICATION', 
+               payload: { type: 'info', message: `New message from ${data.senderId === 'ping-ai' ? 'PingAI' : 'a contact'}` } 
+             });
+
+             if (state.settings.notifications.push) {
+               notificationService.showLocalNotification(`PingSpace`, {
+                 body: data.text || 'You received a new file.',
+                 tag: data.chatId
+               });
+             }
+          }
+       };
+
+       socketService.on('new_message', handleNewMessage);
        return () => {
-         socketService.disconnect();
+         socketService.off('new_message', handleNewMessage);
        };
     }
-  }, [state.currentUser, dispatch]);
+  }, [state.currentUser, state.settings.notifications.push, dispatch]);
 
   // --- 5. AUTO-REMOVE NOTIFICATIONS ---
   useEffect(() => {
@@ -212,15 +241,12 @@ const MainAppContent = () => {
   }, [state.notifications, dispatch]);
 
   const handleSendMessage = async (sessionId: string, text: string, type: Message['type'] = 'text', metadata?: any) => {
-    // Optimistic UI Update
     dispatch({ type: 'SEND_MESSAGE', payload: { sessionId, text, type, metadata } });
-    
     try {
       await api.chats.sendMessage(sessionId, text, type, metadata);
-      // No need to emit via socket, Firestore listener will pick up changes if we implement full real-time syncing in the hook
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to send message' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message || 'Failed to send message' } });
     }
   };
 
@@ -234,10 +260,23 @@ const MainAppContent = () => {
           senderId: 'ping-ai',
           text,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: Date.now(),
           type: 'text'
         }
       } 
     });
+  };
+
+  const getHeaderTitle = () => {
+    switch (state.activeTab) {
+      case Tab.CHATS: return 'PingSpace';
+      case Tab.STATUS: return 'Status';
+      case Tab.DISCOVERY: return 'Discover';
+      case Tab.MARKET: return 'Market';
+      case Tab.PROFILE: return 'Profile Hub';
+      case Tab.SPACES: return 'Spaces';
+      default: return 'PingSpace';
+    }
   };
 
   // --- RENDERERS ---
@@ -263,7 +302,6 @@ const MainAppContent = () => {
     </div>
   );
 
-  // Global Loading Overlay
   const renderLoading = () => {
     if (!state.isLoading) return null;
     return (
@@ -273,29 +311,32 @@ const MainAppContent = () => {
     );
   };
 
-  if (state.screen === 'splash') {
-    return <SplashScreen />;
-  }
+  if (state.screen === 'splash') return <SplashScreen />;
 
-  if (state.screen === 'login') {
-    return (
-      <>
-        {renderNotifications()}
-        <LoginScreen onNavigate={() => dispatch({ type: 'SET_SCREEN', payload: 'signup' })} />
-      </>
-    );
-  }
+  if (state.screen === 'login') return (
+    <>
+      {renderNotifications()}
+      <LoginScreen 
+        onNavigate={() => dispatch({ type: 'SET_SCREEN', payload: 'signup' })} 
+        onForgotPassword={() => dispatch({ type: 'SET_SCREEN', payload: 'forgot-password' })}
+      />
+    </>
+  );
 
-  if (state.screen === 'signup') {
-    return (
-      <>
-        {renderNotifications()}
-        <SignupScreen onNavigate={() => dispatch({ type: 'SET_SCREEN', payload: 'login' })} />
-      </>
-    );
-  }
+  if (state.screen === 'signup') return (
+    <>
+      {renderNotifications()}
+      <SignupScreen onNavigate={() => dispatch({ type: 'SET_SCREEN', payload: 'login' })} />
+    </>
+  );
 
-  // --- MAIN APP ---
+  if (state.screen === 'forgot-password') return (
+    <>
+      {renderNotifications()}
+      <ForgotPasswordScreen onNavigate={() => dispatch({ type: 'SET_SCREEN', payload: 'login' })} />
+    </>
+  );
+
   const selectedChat = state.chats.find(c => c.id === state.selectedChatId);
 
   return (
@@ -304,15 +345,13 @@ const MainAppContent = () => {
       {renderLoading()}
       {state.activeCall && <CallOverlay call={state.activeCall} />}
 
-      {/* Offline Banner */}
       {!state.isOnline && (
         <div className="bg-slate-800 dark:bg-slate-900 text-white text-[10px] font-bold text-center py-1.5 absolute top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 border-b border-white/10">
            <WifiOff className="w-3 h-3" />
-           You are currently offline. Using cached data.
+           Offline Mode
         </div>
       )}
 
-      {/* Render Chat Window if selected */}
       {state.selectedChatId && selectedChat ? (
         <ChatWindow 
           session={selectedChat} 
@@ -323,24 +362,28 @@ const MainAppContent = () => {
         />
       ) : (
         <>
-          {/* Dynamic Header */}
-          {state.activeTab === Tab.CHATS && (
-            <div className={`p-4 flex justify-between items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur z-10 sticky top-0 border-b border-gray-100 dark:border-slate-800 ${!state.isOnline ? 'mt-6' : ''}`}>
-              <h1 className="text-xl font-bold tracking-wide font-[Poppins] text-[#ff1744]">PingSpace</h1>
-              <div className="flex gap-4">
-                 <button 
-                   onClick={() => dispatch({ type: 'SET_TAB', payload: Tab.SPACES })}
-                   className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] dark:hover:border-[#ff1744] group transition-all shadow-sm"
-                   aria-label="Go to Spaces"
-                 >
-                   <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-white" />
-                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300 group-hover:text-white">Spaces</span>
-                 </button>
-              </div>
+          {/* Universal Dynamic Header */}
+          <header className={`p-4 flex justify-between items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur z-30 sticky top-0 border-b border-gray-100 dark:border-slate-800 ${!state.isOnline ? 'mt-6' : ''}`}>
+            <h1 className="text-xl font-black tracking-tighter font-display text-[#ff1744] uppercase">{getHeaderTitle()}</h1>
+            <div className="flex gap-3">
+               {state.activeTab === Tab.CHATS && (
+                  <button 
+                    onClick={() => dispatch({ type: 'SET_TAB', payload: Tab.SPACES })}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-[#ff1744] hover:border-[#ff1744] group transition-all"
+                  >
+                    <LayoutGrid className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-white" />
+                    <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 group-hover:text-white">Spaces</span>
+                  </button>
+               )}
+               {state.activeTab === Tab.PROFILE && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20">
+                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                     <span className="text-[10px] font-black uppercase text-emerald-600">Secure</span>
+                  </div>
+               )}
             </div>
-          )}
+          </header>
 
-          {/* Main Content Area */}
           <main className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
             {state.activeTab === Tab.CHATS && (
               <ChatList 
@@ -356,28 +399,27 @@ const MainAppContent = () => {
             {state.activeTab === Tab.PROFILE && <ProfileScreen />}
           </main>
 
-          {/* Bottom Navigation */}
-          <nav className="h-[72px] bg-white dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 flex justify-between items-center px-2 pb-2 fixed bottom-0 w-full max-w-md z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] transition-colors duration-300">
+          <nav className="h-[76px] bg-white dark:bg-slate-950 border-t border-gray-100 dark:border-slate-800/50 flex justify-between items-center px-4 pb-4 fixed bottom-0 w-full max-w-md z-40 transition-colors duration-300">
             {[
               { id: Tab.CHATS, icon: MessageCircle, label: 'Chats' },
               { id: Tab.STATUS, icon: CircleDashed, label: 'Status' },
-              { id: Tab.DISCOVERY, icon: Compass, label: 'Discover' },
+              { id: Tab.DISCOVERY, icon: Compass, label: 'Explore' },
               { id: Tab.MARKET, icon: ShoppingBag, label: 'Market' },
               { id: Tab.PROFILE, icon: UserIcon, label: 'Profile' },
             ].map((item) => {
-              // Highlight Chats tab if we are in Chats OR Spaces
               const isActive = state.activeTab === item.id || (item.id === Tab.CHATS && state.activeTab === Tab.SPACES);
-              
               return (
                 <button
                   key={item.id}
                   onClick={() => dispatch({ type: 'SET_TAB', payload: item.id as Tab })}
-                  className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors duration-200 ${isActive ? 'text-[#ff1744]' : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'}`}
+                  className={`flex flex-col items-center justify-center w-full h-full gap-1.5 transition-all duration-300 ${isActive ? 'text-[#ff1744] translate-y-[-4px]' : 'text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300'}`}
                   aria-selected={isActive}
                   role="tab"
                 >
-                  <item.icon className={`w-6 h-6 ${isActive ? 'fill-[#ff1744]/10' : ''}`} strokeWidth={isActive ? 2.5 : 2} />
-                  <span className="text-[10px] font-medium">{item.label}</span>
+                  <div className={`p-2 rounded-2xl transition-all ${isActive ? 'bg-[#ff1744]/10 shadow-lg shadow-red-500/10' : ''}`}>
+                    <item.icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
                 </button>
               );
             })}

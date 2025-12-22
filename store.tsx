@@ -1,10 +1,8 @@
 
-
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story } from './types';
 
 // --- INITIAL STATE ---
-// Started empty to simulate waiting for backend
 const savedTheme = localStorage.getItem('pingspace_theme') as 'light' | 'dark' || 'light';
 
 const initialState: GlobalState = {
@@ -22,7 +20,7 @@ const initialState: GlobalState = {
   transactions: [],
   spaces: [],
   products: [],
-  stories: [], // New stories array
+  stories: [], 
   workspaceWidgets: [
     {
       id: 'w1',
@@ -90,7 +88,7 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
     case 'UPDATE_USER':
       return { ...state, currentUser: state.currentUser ? { ...state.currentUser, ...action.payload } : null };
     case 'LOGOUT':
-      return { ...initialState, screen: 'login', theme: state.theme }; // Preserve theme on logout
+      return { ...initialState, screen: 'login', theme: state.theme }; 
     case 'SET_TAB':
       return { ...state, activeTab: action.payload };
     case 'SELECT_CHAT':
@@ -132,6 +130,9 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
     }
     case 'REMOVE_FROM_CART':
       return { ...state, cart: state.cart.filter(item => item.id !== action.payload) };
+    
+    case 'CLEAR_CART':
+      return { ...state, cart: [] };
 
     case 'SEND_MESSAGE': {
       const { sessionId, text, type, metadata, replyTo, expiresAt } = action.payload;
@@ -144,7 +145,8 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         type: type || 'text',
         metadata: metadata,
         replyTo: replyTo,
-        expiresAt: expiresAt
+        expiresAt: expiresAt,
+        isStarred: false
       };
       
       return {
@@ -169,7 +171,12 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       };
     }
 
-    case 'CREATE_GROUP': {
+    case 'CREATE_GROUP': 
+    case 'ADD_CHAT': {
+      const exists = state.chats.some(c => c.id === action.payload.id);
+      if (exists) {
+        return { ...state, selectedChatId: action.payload.id };
+      }
       return {
         ...state,
         chats: [action.payload, ...state.chats],
@@ -213,6 +220,28 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         })
       };
 
+    case 'TOGGLE_STAR_MESSAGE': {
+      const { sessionId, messageId } = action.payload;
+      return {
+        ...state,
+        chats: state.chats.map(chat => {
+          if (chat.id !== sessionId) return chat;
+          return {
+            ...chat,
+            messages: chat.messages.map(msg => msg.id === messageId ? { ...msg, isStarred: !msg.isStarred } : msg)
+          };
+        })
+      };
+    }
+
+    case 'SET_CHAT_WALLPAPER': {
+      const { sessionId, url } = action.payload;
+      return {
+        ...state,
+        chats: state.chats.map(c => c.id === sessionId ? { ...c, wallpaper: url } : c)
+      };
+    }
+
     case 'TOGGLE_TASK': {
       const { widgetId, taskId } = action.payload;
       return {
@@ -254,7 +283,6 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
               
               let newReactions;
               if (existingReaction) {
-                // Toggle logic: if user already reacted, typically remove it, but for simplicity we just increment or add
                 newReactions = reactions.map(r => r.emoji === emoji ? { ...r, count: r.count + 1 } : r);
               } else {
                 newReactions = [...reactions, { emoji, count: 1, userIds: ['me'] }];
@@ -274,7 +302,6 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         chats: state.chats.map(chat => {
           if (chat.id !== action.payload.sessionId) return chat;
           
-          // Filter out expired messages
           const validMessages = chat.messages.filter(msg => {
             if (!msg.expiresAt) return true;
             return msg.expiresAt > now;

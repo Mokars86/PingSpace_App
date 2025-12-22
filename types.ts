@@ -1,12 +1,12 @@
 
-
 export enum Tab {
   CHATS = 'Chats',
   STATUS = 'Status',
   DISCOVERY = 'Discovery',
   SPACES = 'Spaces',
   MARKET = 'Market',
-  PROFILE = 'Profile'
+  PROFILE = 'Profile',
+  WALLET = 'Wallet'
 }
 
 export interface User {
@@ -14,6 +14,7 @@ export interface User {
   name: string;
   avatar: string;
   status?: string;
+  bio?: string;
   isOnline?: boolean;
 }
 
@@ -21,10 +22,11 @@ export interface Message {
   id: string;
   senderId: string;
   text: string;
-  timestamp: string; // Display string (e.g., "10:00 AM")
-  createdAt: number; // Unix timestamp for sorting/grouping
+  timestamp: string; 
+  createdAt: number; 
   type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'payment' | 'product' | 'system';
   metadata?: any;
+  isStarred?: boolean;
   replyTo?: {
     id: string;
     text: string;
@@ -35,20 +37,21 @@ export interface Message {
     count: number;
     userIds: string[];
   }[];
-  expiresAt?: number; // Timestamp when message should disappear
+  expiresAt?: number; 
 }
 
 export interface ChatSession {
   id: string;
-  participant: User; // For groups, this represents the Group info (Name/Avatar)
+  participant: User; 
   lastMessage: string;
   lastTime: string;
   unread: number;
   messages: Message[];
   isGroup?: boolean;
   isPinned?: boolean;
-  members?: string[]; // IDs of participants
-  disappearingMode?: boolean; // If true, new messages disappear
+  members?: string[]; 
+  disappearingMode?: boolean; 
+  wallpaper?: string;
 }
 
 export interface Product {
@@ -61,6 +64,9 @@ export interface Product {
   description?: string;
   category?: string;
   condition?: string;
+  location?: string;
+  tags?: string[];
+  isAvailable?: boolean;
 }
 
 export interface CartItem extends Product {
@@ -90,14 +96,12 @@ export interface Notification {
   message: string;
 }
 
-// --- NEW FEATURES TYPES ---
-
 export interface WorkspaceWidget {
   id: string;
   type: 'tasks' | 'notes' | 'calendar' | 'links';
   title: string;
   content: any;
-  w: string; // width class (e.g. col-span-2)
+  w: string; 
 }
 
 export interface SummaryResult {
@@ -146,9 +150,7 @@ export interface AppSettings {
   };
 }
 
-// --- GLOBAL STATE TYPES ---
-
-export type Screen = 'splash' | 'login' | 'signup' | 'main';
+export type Screen = 'splash' | 'login' | 'signup' | 'forgot-password' | 'main';
 
 export interface GlobalState {
   isLoading: boolean;
@@ -186,6 +188,7 @@ export type Action =
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
   | { type: 'ADD_TO_CART'; payload: Product }
   | { type: 'REMOVE_FROM_CART'; payload: string }
+  | { type: 'CLEAR_CART' }
   | { type: 'SEND_MESSAGE'; payload: { sessionId: string; text: string; type?: Message['type']; metadata?: any; replyTo?: Message['replyTo']; expiresAt?: number } }
   | { type: 'RECEIVE_MESSAGE'; payload: { sessionId: string; message: Message } }
   | { type: 'MARK_READ'; payload: string }
@@ -195,9 +198,12 @@ export type Action =
   | { type: 'ADD_SPACE'; payload: Space }
   | { type: 'JOIN_SPACE'; payload: string }
   | { type: 'CREATE_GROUP'; payload: ChatSession }
+  | { type: 'ADD_CHAT'; payload: ChatSession }
   | { type: 'SET_DATA'; payload: { chats: ChatSession[], contacts: User[], products: Product[], spaces: Space[], transactions: Transaction[], stories: Story[] } }
   | { type: 'TOGGLE_TASK'; payload: { widgetId: string; taskId: string } }
   | { type: 'TOGGLE_DISAPPEARING_MODE'; payload: { sessionId: string; enabled: boolean } }
+  | { type: 'TOGGLE_STAR_MESSAGE'; payload: { sessionId: string; messageId: string } }
+  | { type: 'SET_CHAT_WALLPAPER'; payload: { sessionId: string; url: string } }
   | { type: 'ADD_REACTION'; payload: { sessionId: string; messageId: string; emoji: string } }
   | { type: 'DELETE_EXPIRED_MESSAGES'; payload: { sessionId: string } }
   | { type: 'START_CALL'; payload: { participant: User; type: 'audio' | 'video' } }
