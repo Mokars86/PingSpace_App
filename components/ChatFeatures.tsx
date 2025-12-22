@@ -7,7 +7,8 @@ import {
   Search, UserPlus, Users, ChevronRight, MapPin, FileText, Plus, Play, Pause,
   Reply, Clock, Heart, Timer, Trash2, Download, ExternalLink, CheckCircle,
   MessageCircle, Zap, Star, ChevronDown, Filter, Settings, Palette,
-  Music, File as FileIcon, Navigation, Volume2, StopCircle, Ghost, Flame
+  Music, File as FileIcon, Navigation, Volume2, StopCircle, Ghost, Flame,
+  Pin, PinOff
 } from 'lucide-react';
 import { User, Message, ChatSession, SummaryResult } from '../types';
 import { sendMessageToGemini, generateChatSummary, getQuickSuggestions } from '../services/geminiService';
@@ -332,6 +333,19 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
     }
   };
 
+  const handleTogglePin = async (e: React.MouseEvent, chat: ChatSession) => {
+    e.stopPropagation();
+    const nextPinned = !chat.isPinned;
+    dispatch({ type: 'TOGGLE_PIN_CHAT', payload: { chatId: chat.id, isPinned: nextPinned } });
+    try {
+      await api.chats.togglePin(chat.id, nextPinned);
+    } catch (err: any) {
+      // Revert if failed
+      dispatch({ type: 'TOGGLE_PIN_CHAT', payload: { chatId: chat.id, isPinned: !nextPinned } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Sync failed.' } });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full pb-20 overflow-y-auto bg-gray-50 dark:bg-slate-950 transition-colors relative no-scrollbar">
       <NewChatModal 
@@ -353,6 +367,14 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
                 {chat.participant.isOnline && (
                   <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>
                 )}
+                <div className="absolute -top-1 -right-1">
+                   <button 
+                    onClick={(e) => handleTogglePin(e, chat)}
+                    className="p-1 bg-white dark:bg-slate-800 rounded-full shadow-md text-[#ff1744] border border-gray-100 dark:border-slate-700"
+                   >
+                     <PinOff className="w-3 h-3" />
+                   </button>
+                </div>
               </div>
               <span className="text-[10px] mt-2 font-black text-slate-700 dark:text-slate-300 truncate w-16 text-center uppercase tracking-tighter">{chat.participant.name.split(' ')[0]}</span>
             </div>
@@ -371,10 +393,11 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
         </div>
         <div className="space-y-1">
           {chats.map(chat => (
-            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 p-3 rounded-3xl transition-all duration-300 active:scale-[0.98]">
+            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 p-3 rounded-3xl transition-all duration-300 active:scale-[0.98] group">
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <img src={chat.participant.avatar} alt={chat.participant.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
+                  {chat.isPinned && <Pin className="absolute -top-1 -left-1 w-4 h-4 text-[#ff1744] fill-[#ff1744]" />}
                 </div>
                 <div className="overflow-hidden">
                   <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 uppercase tracking-tight">
@@ -387,7 +410,15 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1.5">
-                <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{chat.lastTime}</span>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={(e) => handleTogglePin(e, chat)}
+                    className="p-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-[#ff1744]/10 text-[#ff1744]"
+                  >
+                    {chat.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                  </button>
+                  <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{chat.lastTime}</span>
+                </div>
                 {chat.unread > 0 && (
                   <div className="px-2 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
                     {chat.unread}
@@ -915,7 +946,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
         </div>
         {session.disappearingMode && (
           <div className="bg-[#ff1744]/10 py-1 px-4 flex items-center justify-center gap-2 border-t border-[#ff1744]/20 animate-in slide-in-from-top-4">
-             <Flame className="w-3 h-3 text-[#ff1744] animate-pulse" />
+             <span className="animate-pulse">🔥</span>
              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ff1744]">Burning mode active: 10s expiration</span>
           </div>
         )}
@@ -1165,7 +1196,3 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
     </div>
   );
 };
-
-const Maximize2: React.FC<{ className?: string }> = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-);

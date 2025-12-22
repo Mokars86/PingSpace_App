@@ -374,6 +374,16 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         }
       };
 
+    case 'TOGGLE_PIN_CHAT':
+      return {
+        ...state,
+        chats: state.chats.map(c => 
+          c.id === action.payload.chatId 
+            ? { ...c, isPinned: action.payload.isPinned }
+            : c
+        )
+      };
+
     default:
       return state;
   }

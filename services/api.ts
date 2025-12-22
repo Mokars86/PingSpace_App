@@ -313,6 +313,13 @@ export const api = {
       const { error } = await supabase.from('messages').insert({ chat_id: sessionId, sender_id: user.id, text, type, metadata });
       if (error) throw new Error(formatError(error, "Message failed"));
       await supabase.from('chats').update({ last_message: text || type, last_message_time: new Date().toISOString() }).eq('id', sessionId);
+    },
+    togglePin: async (chatId: string, isPinned: boolean): Promise<void> => {
+      const { error } = await supabase
+        .from('chats')
+        .update({ is_pinned: isPinned })
+        .eq('id', chatId);
+      if (error) throw new Error(formatError(error, "Failed to update pin state"));
     }
   },
   wallet: {

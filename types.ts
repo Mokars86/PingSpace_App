@@ -205,11 +205,12 @@ export type Action =
   | { type: 'TOGGLE_STAR_MESSAGE'; payload: { sessionId: string; messageId: string } }
   | { type: 'SET_CHAT_WALLPAPER'; payload: { sessionId: string; url: string } }
   | { type: 'ADD_REACTION'; payload: { sessionId: string; messageId: string; emoji: string } }
-  | { type: 'DELETE_EXPIRED_MESSAGES'; payload: { sessionId: string } }
+  | { type: 'DELETE_EXPIRED_MESSAGES'; payload: { sessionId: string; } }
   | { type: 'START_CALL'; payload: { participant: User; type: 'audio' | 'video' } }
   | { type: 'END_CALL' }
   | { type: 'SET_CALL_STATUS'; payload: ActiveCall['status'] }
   | { type: 'TOGGLE_CALL_MUTE' }
   | { type: 'TOGGLE_CALL_VIDEO' }
   | { type: 'SET_ONLINE_STATUS'; payload: boolean }
-  | { type: 'UPDATE_SETTING'; payload: { section: keyof AppSettings; key: string; value: any } };
+  | { type: 'UPDATE_SETTING'; payload: { section: keyof AppSettings; key: string; value: any } }
+  | { type: 'TOGGLE_PIN_CHAT'; payload: { chatId: string; isPinned: boolean } };

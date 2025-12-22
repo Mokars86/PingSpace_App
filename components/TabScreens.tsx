@@ -17,7 +17,8 @@ import {
   History, Sparkles, Image as ImageIcon, Box, Layers, MapPin as MapPinIcon, Info as InfoIcon, Edit3, Save,
   Fingerprint as SecurityIcon, Shield as ShieldIcon, RefreshCcw, Languages, Accessibility, 
   MessageSquareHeart, Bug, BookOpen, ShieldAlert, Wallet as WalletIcon, ShoppingCart as MarketIcon,
-  Package, Info, MapPin as LocationIcon, CheckCircle, Minus, ShoppingCart as CartIcon, MoveRight
+  Package, Info, MapPin as LocationIcon, CheckCircle, Minus, ShoppingCart as CartIcon, MoveRight,
+  Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu
 } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
 import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem } from '../types';
@@ -36,18 +37,19 @@ const SettingRow: React.FC<{
   value?: string | boolean, 
   onClick?: () => void,
   isToggle?: boolean,
-  color?: string
-}> = ({ icon: Icon, title, subtitle, value, onClick, isToggle, color = "text-slate-400" }) => (
+  color?: string,
+  isDanger?: boolean
+}> = ({ icon: Icon, title, subtitle, value, onClick, isToggle, color = "text-slate-400", isDanger }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group border-b border-gray-50 dark:border-slate-800/50 last:border-0"
+    className={`w-full flex items-center justify-between p-5 transition-all group border-b border-gray-50 dark:border-slate-800/50 last:border-0 ${isDanger ? 'hover:bg-red-50 dark:hover:bg-red-900/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'}`}
   >
     <div className="flex items-center gap-4">
-      <div className={`w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition-transform group-hover:scale-110 ${color}`}>
+      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${isDanger ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-slate-100 dark:bg-slate-800 ' + color}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div className="text-left">
-        <h4 className="font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-slate-200">{title}</h4>
+        <h4 className={`font-black uppercase text-[10px] tracking-widest ${isDanger ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>{title}</h4>
         {subtitle && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{subtitle}</p>}
       </div>
     </div>
@@ -59,7 +61,7 @@ const SettingRow: React.FC<{
       ) : (
         <>
           {value && <span className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">{value}</span>}
-          <ChevronRight className="w-4 h-4 text-slate-300" />
+          <ChevronRight className={`w-4 h-4 ${isDanger ? 'text-red-300' : 'text-slate-300'}`} />
         </>
       )}
     </div>
@@ -321,18 +323,61 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4">
-       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-sm p-6 relative shadow-2xl border border-white/20 dark:border-slate-800">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10"><X className="w-5 h-5 text-slate-500" /></button>
-          <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">Create Space</h3>
-          <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-video bg-gray-50 dark:bg-slate-950 rounded-3xl mb-6 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800">
-             {image ? <img src={image} className="w-full h-full object-cover" alt="Preview" /> : <Camera className="w-8 h-8 text-[#ff1744]" />}
-             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
+       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-w-sm p-8 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto animate-in zoom-in-95">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 dark:bg-slate-800 rounded-full z-10 hover:rotate-90 transition-transform"><X className="w-5 h-5 text-slate-500" /></button>
+          
+          <div className="flex items-center gap-4 mb-8">
+             <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center text-indigo-500">
+                <Rocket className="w-6 h-6" />
+             </div>
+             <div>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Launch Space</h3>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Protocol Initialize</p>
+             </div>
           </div>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Space Name" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-4" />
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-6 resize-none h-24" />
-          <button onClick={handleCreate} disabled={!name || !description || !image || loading || uploading} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/30">
-             {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Launch Space'}
+
+          <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-video bg-gray-50 dark:bg-slate-950 rounded-3xl mb-8 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 group cursor-pointer hover:border-[#ff1744]/50 transition-colors">
+             {image ? (
+               <>
+                 <img src={image} className="w-full h-full object-cover" alt="Preview" />
+                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <RefreshCcw className="w-8 h-8 text-white" />
+                 </div>
+               </>
+             ) : (
+               <>
+                 <Camera className="w-10 h-10 text-slate-300 group-hover:text-[#ff1744] transition-colors mb-2" />
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Add Neural Visual</span>
+               </>
+             )}
+             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
+             {uploading && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
+          </div>
+
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Identity Name</label>
+               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Neo Tokyo Explorers" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" />
+            </div>
+
+            <div className="space-y-1.5">
+               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Mission Parameters</label>
+               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the collective purpose..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-medium resize-none h-24 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm" />
+            </div>
+          </div>
+
+          <button 
+             onClick={handleCreate} 
+             disabled={!name || !description || !image || loading || uploading} 
+             className="w-full mt-8 py-5 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs"
+          >
+             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+               <>
+                 <span>Initiate Launch</span>
+                 <Rocket className="w-4 h-4" />
+               </>
+             )}
           </button>
        </div>
     </div>
@@ -341,26 +386,168 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
 export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
   const [showAddSpace, setShowAddSpace] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const dispatch = useGlobalDispatch();
 
+  const categories = [
+    { name: 'All', icon: Globe },
+    { name: 'Tech', icon: Cpu },
+    { name: 'Gaming', icon: Gamepad2 },
+    { name: 'Art', icon: Palette },
+    { name: 'Social', icon: Coffee },
+    { name: 'Trading', icon: TrendingUp }
+  ];
+
+  const filteredSpaces = spaces.filter(s => {
+     const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.description.toLowerCase().includes(searchQuery.toLowerCase());
+     return matchesSearch;
+  });
+
+  const heroSpace = spaces.length > 0 ? spaces[0] : null;
+
   return (
-    <div className="p-4 overflow-y-auto h-full pb-32 bg-gray-50 dark:bg-slate-950 transition-colors">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950 transition-colors pb-32 overflow-hidden">
       <AddSpaceModal isOpen={showAddSpace} onClose={() => setShowAddSpace(false)} />
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Global Spaces</h3>
-        <button onClick={() => setShowAddSpace(true)} className="p-2.5 bg-[#ff1744] text-white rounded-2xl shadow-xl shadow-red-500/20 hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></button>
+      
+      {/* Dynamic Header */}
+      <div className="px-6 pt-6 pb-2 space-y-6 shrink-0">
+        <div className="flex items-center justify-between">
+           <div>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Spaces</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Neural Collective Network</p>
+           </div>
+           <button onClick={() => setShowAddSpace(true)} className="p-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-[1.75rem] shadow-xl hover:scale-110 active:scale-95 transition-all">
+              <Plus className="w-6 h-6" strokeWidth={3} />
+           </button>
+        </div>
+
+        {/* Search Pulse */}
+        <div className="relative group">
+           <Search className="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-[#ff1744] transition-colors" />
+           <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Query the collective..." 
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] py-4 pl-12 pr-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
+           />
+        </div>
+
+        {/* Neural Categories */}
+        <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
+           {categories.map(cat => (
+             <button 
+                key={cat.name} 
+                onClick={() => setActiveCategory(cat.name)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${
+                  activeCategory === cat.name 
+                    ? 'bg-[#ff1744] text-white border-[#ff1744] shadow-lg shadow-red-500/20' 
+                    : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-gray-100 dark:border-slate-800 hover:border-slate-300'
+                }`}
+             >
+                <cat.icon className="w-3.5 h-3.5" />
+                {cat.name}
+             </button>
+           ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-5">
-        {spaces.map(space => (
-          <div key={space.id} className="bg-white dark:bg-slate-900 rounded-[2rem] p-5 shadow-sm border border-gray-100 dark:border-slate-800 flex items-center gap-5 group hover:shadow-lg transition-all">
-            <img src={space.image} className="w-24 h-24 rounded-3xl object-cover shadow-sm group-hover:scale-105 transition-transform" alt={space.name} />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-black text-slate-900 dark:text-white group-hover:text-[#ff1744] transition-colors">{space.name}</h3>
-              <p className="text-[10px] font-black uppercase text-slate-400 mb-2">{space.members.toLocaleString()} members</p>
-              <button onClick={() => dispatch({ type: 'JOIN_SPACE', payload: space.id })} className={`mt-3 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${space.joined ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}>{space.joined ? 'Joined' : 'Join'}</button>
-            </div>
+
+      <div className="flex-1 overflow-y-auto px-6 pt-4 no-scrollbar space-y-8 pb-20">
+        {/* Trending Hero Section */}
+        {heroSpace && !searchQuery && (
+          <div className="relative group">
+             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+             <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-sm border border-gray-100 dark:border-slate-800">
+                <div className="aspect-[21/9] relative overflow-hidden">
+                   <img src={heroSpace.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" alt={heroSpace.name} />
+                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
+                   <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ff1744] rounded-xl flex items-center gap-2">
+                      <Flame className="w-3 h-3 text-white fill-white" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white">Trending Hub</span>
+                   </div>
+                </div>
+                <div className="p-6">
+                   <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{heroSpace.name}</h3>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                         <Users className="w-3 h-3 text-slate-400" />
+                         <span className="text-[10px] font-black text-slate-500">{heroSpace.members.toLocaleString()}</span>
+                      </div>
+                   </div>
+                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6 line-clamp-2">{heroSpace.description}</p>
+                   <button 
+                      onClick={() => dispatch({ type: 'JOIN_SPACE', payload: heroSpace.id })} 
+                      className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        heroSpace.joined 
+                          ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 border border-emerald-100 dark:border-emerald-900/20' 
+                          : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl'
+                      }`}
+                   >
+                      {heroSpace.joined ? 'Active Participant' : 'Initiate Connection'}
+                   </button>
+                </div>
+             </div>
           </div>
-        ))}
+        )}
+
+        {/* Network Grid */}
+        <div className="space-y-4">
+           <div className="flex items-center justify-between px-1">
+              <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Network Nodes</h3>
+              <span className="text-[10px] font-black text-slate-300">{filteredSpaces.length} Available</span>
+           </div>
+           
+           {filteredSpaces.length === 0 ? (
+              <div className="py-20 text-center opacity-30">
+                 <CircleDashed className="w-12 h-12 mx-auto mb-4 animate-spin duration-[3s]" />
+                 <p className="text-xs font-black uppercase tracking-widest">No active sectors found</p>
+              </div>
+           ) : (
+              <div className="grid gap-5">
+                 {filteredSpaces.filter(s => s.id !== (heroSpace && !searchQuery ? heroSpace.id : null)).map(space => (
+                    <div 
+                       key={space.id} 
+                       className="bg-white dark:bg-slate-900 rounded-[2.25rem] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-100 dark:border-slate-800 group hover:shadow-2xl hover:border-slate-200 dark:hover:border-slate-700 transition-all flex items-center gap-5"
+                    >
+                       <div className="relative shrink-0">
+                          <img src={space.image} className="w-20 h-20 rounded-[1.75rem] object-cover shadow-lg group-hover:scale-105 transition-transform duration-500" alt={space.name} />
+                          {space.joined && (
+                             <div className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-emerald-500 rounded-xl border-4 border-white dark:border-slate-900 flex items-center justify-center shadow-lg">
+                                <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
+                             </div>
+                          )}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate group-hover:text-[#ff1744] transition-colors">{space.name}</h3>
+                          <p className="text-[10px] font-black uppercase text-slate-400 mb-4">{space.members.toLocaleString()} members</p>
+                          
+                          <div className="flex items-center justify-between">
+                             {/* Avatar Stack Mockup */}
+                             <div className="flex -space-x-2">
+                                {[1,2,3].map(i => (
+                                   <img key={i} src={`https://picsum.photos/50/50?random=${space.id}${i}`} className="w-6 h-6 rounded-lg border-2 border-white dark:border-slate-900 object-cover" alt="Member" />
+                                ))}
+                                <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-black text-slate-400">+5</div>
+                             </div>
+                             
+                             <button 
+                                onClick={() => dispatch({ type: 'JOIN_SPACE', payload: space.id })} 
+                                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                                   space.joined 
+                                      ? 'bg-slate-50 dark:bg-slate-800 text-slate-400' 
+                                      : 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20'
+                                }`}
+                             >
+                                {space.joined ? 'Member' : 'Join'}
+                             </button>
+                          </div>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           )}
+        </div>
       </div>
     </div>
   );
@@ -462,7 +649,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4">
-       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-w-sm h-[80vh] flex flex-col relative shadow-2xl border border-white/20 dark:border-slate-800 animate-in zoom-in-95">
+       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm h-[80vh] flex flex-col relative shadow-2xl border border-white/20 dark:border-slate-800 animate-in zoom-in-95">
           <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Supply Hub</h3>
              <button onClick={onClose} className="p-2 bg-gray-50 dark:bg-slate-800 rounded-full"><X className="w-5 h-5 text-slate-400" /></button>
@@ -723,6 +910,19 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    // Perform an optimistic immediate local logout to ensure UI responsiveness
+    dispatch({ type: 'LOGOUT' });
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Disconnecting session...' } });
+    
+    try {
+      // Fire and forget server-side sign out
+      api.auth.logout().catch(err => console.error("Server signout ignored as local state cleared", err));
+    } catch (err: any) {
+      console.warn("Sign out request error", err);
+    }
+  };
+
   const updateSetting = (section: keyof AppSettings, key: string, value: any) => {
     dispatch({ type: 'UPDATE_SETTING', payload: { section, key, value } });
   };
@@ -915,7 +1115,7 @@ export const ProfileScreen: React.FC = () => {
   );
 
   const renderMain = () => (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 pb-12">
       <input type="file" ref={avatarInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
       
       {/* Profile Identity Card */}
@@ -959,6 +1159,13 @@ export const ProfileScreen: React.FC = () => {
               <SettingRow icon={Accessibility} title="Neural Interface" subtitle="Accessibility & UX modifiers" onClick={() => setActiveView('accessibility')} />
               <SettingRow icon={Languages} title="Linguistic Grid" subtitle="Regional semantic translation" onClick={() => setActiveView('language')} />
               <SettingRow icon={HelpCircle} title="Support Hub" subtitle="Help Center & diagnostics" onClick={() => setActiveView('help')} />
+              <SettingRow 
+                icon={LogOut} 
+                title="Sign Out" 
+                subtitle="Disconnect active session" 
+                isDanger 
+                onClick={handleLogout} 
+              />
            </div>
         </div>
 
@@ -974,17 +1181,12 @@ export const ProfileScreen: React.FC = () => {
              color={theme === 'light' ? 'text-amber-500' : 'text-purple-400'}
            />
         </div>
-
-        <button onClick={() => dispatch({ type: 'LOGOUT' })} className="w-full py-5 bg-red-50 dark:bg-red-950/20 text-[#ff1744] font-black rounded-3xl border border-red-100 dark:border-red-900/30 uppercase tracking-[0.2em] transition-all hover:bg-[#ff1744] hover:text-white flex items-center justify-center gap-3">
-           <LogOut className="w-5 h-5" />
-           Disconnect Session
-        </button>
       </div>
     </div>
   );
 
   return (
-    <div className="p-4 overflow-y-auto h-full pb-32 bg-gray-50 dark:bg-slate-950 transition-colors no-scrollbar">
+    <div className="p-4 overflow-y-auto h-full pb-40 bg-gray-50 dark:bg-slate-950 transition-colors no-scrollbar">
       {activeView === 'main' && renderMain()}
       {activeView === 'wallet' && renderWallet()}
       {activeView === 'privacy' && renderPrivacy()}
@@ -1084,7 +1286,7 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
-       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md p-6 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto">
+       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-md p-6 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10"><X className="w-5 h-5 text-slate-500" /></button>
           
           <div className="flex items-center gap-3 mb-6">
