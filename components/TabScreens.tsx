@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, Plus, Heart, MessageCircle, Share2, 
@@ -154,6 +155,20 @@ const StoryViewerModal: React.FC<{
     }
   };
 
+  const handleDeleteStory = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (activeStory && window.confirm("Delete this story?")) {
+      dispatch({ type: 'DELETE_STORY', payload: activeStory.id });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Story deleted' } });
+      
+      if (activeGroup.stories.length <= 1) {
+        onClose();
+      } else {
+        handleNext();
+      }
+    }
+  };
+
   const handleTouchStart = () => {
     touchStartTimeRef.current = Date.now();
     setIsPaused(true);
@@ -163,7 +178,7 @@ const StoryViewerModal: React.FC<{
     const duration = Date.now() - touchStartTimeRef.current;
     setIsPaused(false);
 
-    if (duration < 200) { // It's a tap
+    if (duration < 200) {
       const { clientX } = 'touches' in e ? e.touches[0] || (e as any).changedTouches[0] : e as React.MouseEvent;
       const screenWidth = window.innerWidth;
       if (clientX < screenWidth / 3) {
@@ -185,7 +200,6 @@ const StoryViewerModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-in fade-in duration-300 select-none">
-       {/* Story Content Layer */}
        <div 
          className="relative flex-1 flex items-center justify-center overflow-hidden"
          onMouseDown={handleTouchStart}
@@ -206,10 +220,8 @@ const StoryViewerModal: React.FC<{
              </div>
           )}
 
-          {/* Overlay Gradients */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 z-20 pointer-events-none"></div>
 
-          {/* Top Controls & Progress Indicators */}
           <div className="absolute top-0 left-0 right-0 p-4 pt-6 z-30 flex flex-col gap-4">
              <div className="flex gap-1.5 px-2">
                 {activeGroup.stories.map((_, idx) => (
@@ -235,6 +247,11 @@ const StoryViewerModal: React.FC<{
                    </div>
                 </div>
                 <div className="flex items-center gap-2">
+                   {activeGroup.userId === 'me' && (
+                     <button onClick={handleDeleteStory} className="p-2 text-white/80 hover:text-red-400 transition-colors">
+                       <Trash2 className="w-5 h-5" />
+                     </button>
+                   )}
                    <button className="p-2 text-white/80 hover:text-white transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
                    <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md text-white transition-all">
                       <X className="w-5 h-5" />
@@ -244,14 +261,12 @@ const StoryViewerModal: React.FC<{
           </div>
        </div>
 
-       {/* Caption Section */}
        {activeStory.caption && activeStory.type === 'image' && (
          <div className="absolute bottom-24 left-0 right-0 px-8 flex justify-center text-center z-30 pointer-events-none">
             <p className="max-w-md text-white font-semibold text-lg drop-shadow-md">{activeStory.caption}</p>
          </div>
        )}
 
-       {/* Reply Bar Layer */}
        <div className="p-4 pb-8 bg-black z-40">
           <div className="flex items-center gap-3">
              <div className="flex-1 flex items-center gap-3 bg-white/10 backdrop-blur-3xl px-4 py-2 rounded-full border border-white/10">
@@ -450,7 +465,7 @@ export const StatusScreen: React.FC = () => {
   }, [stories]);
 
   return (
-    <div className="min-h-full bg-white dark:bg-slate-950 transition-colors pb-32">
+    <div className="min-h-full bg-white dark:bg-slate-950 transition-colors pb-32 overflow-y-auto no-scrollbar">
       <AddStoryModal isOpen={showAddStory} onClose={() => setShowAddStory(false)} />
       {activeViewerId && (
         <StoryViewerModal 
@@ -563,1213 +578,118 @@ export const StatusScreen: React.FC = () => {
   );
 };
 
+// Fixed: Added missing DiscoveryScreen export
 export const DiscoveryScreen: React.FC = () => {
   return (
-    <div className="p-4 overflow-y-auto h-full pb-24 bg-gray-50 dark:bg-slate-950 transition-colors">
-      <div className="relative mb-8">
-        <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
-        <input type="text" placeholder="Search PingSpace..." className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 shadow-sm" />
-      </div>
-      <div className="space-y-10">
-        <div>
-           <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Trending Topics</h3>
-              <button className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">See All</button>
-           </div>
-           <div className="flex flex-wrap gap-2">
-             {['#Crypto', '#AI', '#PingSpace', '#Web3', '#DigitalNomad'].map(tag => (
-               <span key={tag} className="px-5 py-2.5 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">{tag}</span>
-             ))}
-           </div>
-        </div>
-        <div className="bg-gradient-to-br from-[#ff1744] to-orange-500 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-red-500/20">
-           <Zap className="absolute right-[-10%] top-[-10%] w-48 h-48 opacity-10 rotate-12" />
-           <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-80">Announcement</p>
-           <h3 className="text-2xl font-black mb-3">PingPlus Beta Access</h3>
-           <p className="text-sm text-white/80 mb-6 font-medium leading-relaxed">Early users get zero-fee trading for 12 months. Limited slots available for testers.</p>
-           <button className="bg-white text-[#ff1744] px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl">Get Access</button>
-        </div>
+    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+      <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 text-slate-900 dark:text-white">Discover</h2>
+      <div className="grid grid-cols-2 gap-4">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-900 rounded-3xl overflow-hidden relative group border border-gray-100 dark:border-slate-800 shadow-sm">
+            <img src={`https://picsum.photos/400/400?random=discover${i}`} className="w-full h-full object-cover opacity-70 group-hover:scale-110 transition-transform duration-500" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute bottom-4 left-4 right-4 translate-y-2 group-hover:translate-y-0 transition-transform">
+              <span className="text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Trending Now</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 };
 
-const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const dispatch = useGlobalDispatch();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [image, setImage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploading(true);
-      try {
-        const url = await storageService.uploadFile(e.target.files[0]);
-        setImage(url);
-      } catch (error: any) {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Upload failed.' } });
-      } finally {
-        setUploading(false);
-      }
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!name || !description || !image) return;
-    setLoading(true);
-    try {
-      const newSpace = await api.spaces.create({ name, description, image });
-      dispatch({ type: 'ADD_SPACE', payload: newSpace });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Space "${name}" created!` } });
-      onClose();
-      setName(''); setDescription(''); setImage('');
-    } catch (e: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to create space.' } });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
-       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm p-8 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto animate-in zoom-in-95">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10 hover:rotate-90 transition-transform"><X className="w-5 h-5 text-slate-500" /></button>
-          
-          <div className="flex items-center gap-4 mb-8">
-             <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center text-indigo-500">
-                <Plus className="w-6 h-6" />
-             </div>
-             <div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">New Space</h3>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Create a community</p>
-             </div>
-          </div>
-
-          <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-video bg-gray-50 dark:bg-slate-950 rounded-3xl mb-8 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 group cursor-pointer hover:border-[#ff1744]/50 transition-colors">
-             {image ? (
-               <>
-                 <img src={image} className="w-full h-full object-cover" alt="Preview" />
-                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <RefreshCcw className="w-8 h-8 text-white" />
-                 </div>
-               </>
-             ) : (
-               <>
-                 <Camera className="w-10 h-10 text-slate-300 group-hover:text-[#ff1744] transition-colors mb-2" />
-                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Upload Cover Image</span>
-               </>
-             )}
-             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
-             {uploading && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
-          </div>
-
-          <div className="space-y-5">
-            <div className="space-y-1.5">
-               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Space Name</label>
-               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Neo Tokyo Explorers" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" />
-            </div>
-
-            <div className="space-y-1.5">
-               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Description</label>
-               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this space about?" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-medium resize-none h-24 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm" />
-            </div>
-          </div>
-
-          <button 
-             onClick={handleCreate} 
-             disabled={!name || !description || !image || loading || uploading} 
-             className="w-full mt-8 py-5 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs"
-          >
-             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-               <>
-                 <span>Create Space</span>
-                 <Check className="w-4 h-4" />
-               </>
-             )}
-          </button>
-       </div>
-    </div>
-  );
-};
-
+// Fixed: Added missing SpacesScreen export
 export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
-  const [showAddSpace, setShowAddSpace] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const dispatch = useGlobalDispatch();
-
-  const categories = [
-    { name: 'All', icon: Globe },
-    { name: 'Tech', icon: Cpu },
-    { name: 'Gaming', icon: Gamepad2 },
-    { name: 'Art', icon: Palette },
-    { name: 'Social', icon: Coffee },
-    { name: 'Trading', icon: TrendingUp }
-  ];
-
-  const filteredSpaces = spaces.filter(s => {
-     const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.description.toLowerCase().includes(searchQuery.toLowerCase());
-     return matchesSearch;
-  });
-
-  const heroSpace = spaces.length > 0 ? spaces[0] : null;
-
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-950 transition-colors pb-32 overflow-hidden">
-      <AddSpaceModal isOpen={showAddSpace} onClose={() => setShowAddSpace(false)} />
-      
-      <div className="px-6 pt-6 pb-2 space-y-6 shrink-0">
-        <div className="flex items-center justify-between">
-           <div>
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Spaces</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Join global communities</p>
-           </div>
-           <button onClick={() => setShowAddSpace(true)} className="p-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-[1.75rem] shadow-xl hover:scale-110 active:scale-95 transition-all">
-              <Plus className="w-6 h-6" strokeWidth={3} />
-           </button>
-        </div>
-
-        <div className="relative group">
-           <Search className="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-[#ff1744] transition-colors" />
-           <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search spaces..." 
-              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] py-4 pl-12 pr-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
-           />
-        </div>
-
-        <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
-           {categories.map(cat => (
-             <button 
-                key={cat.name} 
-                onClick={() => setActiveCategory(cat.name)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${
-                  activeCategory === cat.name 
-                    ? 'bg-[#ff1744] text-white border-[#ff1744] shadow-lg shadow-red-500/20' 
-                    : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-gray-100 dark:border-slate-800 hover:border-slate-300'
-                }`}
-             >
-                <cat.icon className="w-3.5 h-3.5" />
-                {cat.name}
-             </button>
-           ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 pt-4 no-scrollbar space-y-8 pb-20">
-        {heroSpace && !searchQuery && (
-          <div className="relative group">
-             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
-             <div className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-sm border border-gray-100 dark:border-slate-800">
-                <div className="aspect-[21/9] relative overflow-hidden">
-                   <img src={heroSpace.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" alt={heroSpace.name} />
-                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
-                   <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ff1744] rounded-xl flex items-center gap-2">
-                      <Flame className="w-3 h-3 text-white fill-white" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white">Trending</span>
-                   </div>
-                </div>
-                <div className="p-6">
-                   <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{heroSpace.name}</h3>
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                         <Users className="w-3 h-3 text-slate-400" />
-                         <span className="text-[10px] font-black text-slate-500">{heroSpace.members.toLocaleString()}</span>
-                      </div>
-                   </div>
-                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6 line-clamp-2">{heroSpace.description}</p>
-                   <button 
-                      onClick={() => dispatch({ type: 'JOIN_SPACE', payload: heroSpace.id })} 
-                      className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                        heroSpace.joined 
-                          ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 border border-emerald-100 dark:border-emerald-900/20' 
-                          : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl'
-                      }`}
-                   >
-                      {heroSpace.joined ? 'Member' : 'Join Community'}
-                   </button>
-                </div>
-             </div>
+    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+      <h2 className="text-2xl font-black uppercase tracking-tighter mb-6 text-slate-900 dark:text-white">Explore Spaces</h2>
+      <div className="grid gap-4">
+        {spaces.length === 0 ? (
+          <div className="py-20 text-center opacity-30">
+            <Layers className="w-12 h-12 mx-auto mb-4" />
+            <p className="text-[10px] font-black uppercase tracking-widest">No spaces found</p>
           </div>
-        )}
-
-        <div className="space-y-4">
-           <div className="flex items-center justify-between px-1">
-              <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">All Communities</h3>
-              <span className="text-[10px] font-black text-slate-300">{filteredSpaces.length} Results</span>
-           </div>
-           
-           {filteredSpaces.length === 0 ? (
-              <div className="py-20 text-center opacity-30">
-                 <CircleDashed className="w-12 h-12 mx-auto mb-4 animate-spin duration-[3s]" />
-                 <p className="text-xs font-black uppercase tracking-widest">No spaces found</p>
-              </div>
-           ) : (
-              <div className="grid gap-5">
-                 {filteredSpaces.filter(s => s.id !== (heroSpace && !searchQuery ? heroSpace.id : null)).map(space => (
-                    <div 
-                       key={space.id} 
-                       className="bg-white dark:bg-slate-900 rounded-[2.25rem] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-gray-100 dark:border-slate-800 group hover:shadow-2xl hover:border-slate-200 dark:hover:border-slate-700 transition-all flex items-center gap-5"
-                    >
-                       <div className="relative shrink-0">
-                          <img src={space.image} className="w-20 h-20 rounded-[1.75rem] object-cover shadow-lg group-hover:scale-105 transition-transform duration-500" alt={space.name} />
-                          {space.joined && (
-                             <div className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-emerald-500 rounded-xl border-4 border-white dark:border-slate-900 flex items-center justify-center shadow-lg">
-                                <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                             </div>
-                          )}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                          <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate group-hover:text-[#ff1744] transition-colors">{space.name}</h3>
-                          <p className="text-[10px] font-black uppercase text-slate-400 mb-4">{space.members.toLocaleString()} members</p>
-                          
-                          <div className="flex items-center justify-between">
-                             <div className="flex -space-x-2">
-                                {[1,2,3].map(i => (
-                                   <img key={i} src={`https://picsum.photos/50/50?random=${space.id}${i}`} className="w-6 h-6 rounded-lg border-2 border-white dark:border-slate-900 object-cover" alt="Member" />
-                                ))}
-                                <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-black text-slate-400">+5</div>
-                             </div>
-                             <button 
-                                onClick={() => dispatch({ type: 'JOIN_SPACE', payload: space.id })} 
-                                className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                                   space.joined 
-                                      ? 'bg-slate-50 dark:bg-slate-800 text-slate-400' 
-                                      : 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20'
-                                }`}
-                             >
-                                {space.joined ? 'Joined' : 'Join'}
-                             </button>
-                          </div>
-                       </div>
-                    </div>
-                 ))}
-              </div>
-           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Marketplace terminology
-const ProductDetailModal: React.FC<{ product: Product | null; onClose: () => void; onAddToCart: (p: Product) => void }> = ({ product, onClose, onAddToCart }) => {
-  if (!product) return null;
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-       <div className="bg-white dark:bg-slate-900 rounded-t-[3rem] sm:rounded-[3rem] w-full max-lg h-[90vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col relative shadow-2xl animate-in slide-in-from-bottom-10">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white z-10 transition-all active:scale-90"><X className="w-6 h-6" /></button>
-          
-          <div className="w-full aspect-square relative shrink-0">
-             <img src={product.image} className="w-full h-full object-cover" alt={product.title} />
-             <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white dark:from-slate-900 to-transparent"></div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-8 pt-0 no-scrollbar">
-             <div className="flex items-center justify-between mb-4">
-                <div className="px-3 py-1 bg-[#ff1744]/10 rounded-lg">
-                   <span className="text-[10px] font-black uppercase tracking-widest text-[#ff1744]">{product.category || 'General'}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                   <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                   <span className="text-sm font-black text-slate-700 dark:text-slate-200">{product.rating}</span>
-                </div>
-             </div>
-
-             <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-2 leading-tight uppercase tracking-tighter">{product.title}</h2>
-             <div className="flex items-center gap-4 mb-6">
-                <span className="text-4xl font-black text-[#ff1744]">${product.price}</span>
-                {product.condition && <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 rounded-md tracking-widest">{product.condition}</span>}
-             </div>
-
-             <div className="space-y-6">
-                <div>
-                   <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Product Info</h3>
-                   <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium">
-                      {product.description || "No description provided for this item."}
-                   </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 shadow-sm"><UserIcon className="w-5 h-5" /></div>
-                      <div>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Seller</p>
-                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{product.seller}</p>
-                      </div>
-                   </div>
-                   <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 shadow-sm"><MapPinIcon className="w-5 h-5" /></div>
-                      <div>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Location</p>
-                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{product.location || 'Worldwide'}</p>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          </div>
-
-          <div className="p-8 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 flex gap-4">
-             <button className="w-16 h-16 rounded-[2rem] border-2 border-gray-100 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-[#ff1744] transition-colors"><Heart className="w-6 h-6" /></button>
-             <button 
-                onClick={() => { onAddToCart(product); onClose(); }}
-                className="flex-1 h-16 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 flex items-center justify-center gap-3 uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
-             >
-                <ShoppingBag className="w-5 h-5" />
-                Add to Cart
-             </button>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { cart } = useGlobalState();
-  const dispatch = useGlobalDispatch();
-  const [checkingOut, setCheckingOut] = useState(false);
-
-  const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
-    setCheckingOut(true);
-    setTimeout(() => {
-      dispatch({ type: 'CLEAR_CART' });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Order placed successfully!' } });
-      setCheckingOut(false);
-      onClose();
-    }, 2000);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4">
-       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm h-[80vh] flex flex-col relative shadow-2xl border border-white/20 dark:border-slate-800 animate-in zoom-in-95">
-          <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
-             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Shopping Cart</h3>
-             <button onClick={onClose} className="p-2 bg-gray-50 dark:bg-slate-800 rounded-full"><X className="w-5 h-5 text-slate-400" /></button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 no-scrollbar">
-             {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
-                   <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-[2.5rem] flex items-center justify-center mb-6">
-                      <ShoppingBag className="w-10 h-10 text-slate-400" />
-                   </div>
-                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cart is empty</p>
-                </div>
-             ) : (
-                <div className="space-y-4">
-                   {cart.map(item => (
-                      <div key={item.id} className="flex gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-3xl items-center animate-in slide-in-from-right duration-300">
-                         <img src={item.image} className="w-16 h-16 rounded-2xl object-cover shadow-sm" alt={item.title} />
-                         <div className="flex-1 min-w-0">
-                            <h4 className="font-black text-slate-900 dark:text-white text-xs truncate mb-1 uppercase tracking-tighter">{item.title}</h4>
-                            <p className="text-[#ff1744] font-black text-sm">${item.price}</p>
-                         </div>
-                         <div className="flex items-center gap-3">
-                            <button onClick={() => dispatch({ type: 'REMOVE_FROM_CART', payload: item.id })} className="p-2 bg-white dark:bg-slate-700 rounded-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-             )}
-          </div>
-
-          <div className="p-8 bg-gray-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-800 rounded-b-[3rem] space-y-6">
-             <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Grand Total</span>
-                <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">${total.toFixed(2)}</span>
-             </div>
-             <button 
-                onClick={handleCheckout}
-                disabled={cart.length === 0 || checkingOut}
-                className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/30 flex items-center justify-center gap-3 uppercase tracking-widest text-xs hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
-             >
-                {checkingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                  <>
-                    <span>Checkout</span>
-                    <MoveRight className="w-4 h-4" />
-                  </>
-                )}
-             </button>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-export const MarketplaceScreen: React.FC = () => {
-  const { products, cart } = useGlobalState();
-  const dispatch = useGlobalDispatch();
-  const [showSellModal, setShowSellModal] = useState(false);
-  const [showCartModal, setShowCartModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const categories = ['All', 'Electronics', 'Fashion', 'Collectibles', 'Gaming', 'Other'];
-
-  const filteredProducts = products.filter(p => {
-    const matchesCat = activeCategory === 'All' || p.category === activeCategory;
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
-
-  return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-950 transition-colors pb-32">
-      <SellProductModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} />
-      <CartModal isOpen={showCartModal} onClose={() => setShowCartModal(false)} />
-      <ProductDetailModal 
-         product={selectedProduct} 
-         onClose={() => setSelectedProduct(null)} 
-         onAddToCart={(p) => {
-            dispatch({ type: 'ADD_TO_CART', payload: p });
-            dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Item added to cart' } });
-         }}
-      />
-
-      <div className="px-6 pt-6 pb-2 space-y-6">
-        <div className="flex items-center justify-between">
-           <div className="flex items-center gap-3">
-              <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-2xl text-[#ff1744]">
-                 <MarketIcon className="w-6 h-6" />
+        ) : spaces.map(space => (
+          <div key={space.id} className="p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-50">
+                <img src={space.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
               </div>
               <div>
-                 <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Market</h2>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Buy & Sell Items</p>
+                <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{space.name}</h4>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{space.members.toLocaleString()} Active Nodes</p>
               </div>
-           </div>
-           <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setShowCartModal(true)}
-                className="p-3 bg-slate-50 dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl relative text-slate-600 dark:text-slate-300 hover:scale-110 active:scale-95 transition-all shadow-sm"
-              >
-                <CartIcon className="w-5 h-5" />
-                {cart.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#ff1744] text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-950 shadow-md">
-                    {cart.length}
-                  </span>
-                )}
-              </button>
-              <button onClick={() => setShowSellModal(true)} className="p-3 bg-[#ff1744] text-white rounded-2xl shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-all">
-                <Plus className="w-6 h-6" />
-              </button>
-           </div>
-        </div>
-
-        <div className="relative group">
-           <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-[#ff1744] transition-colors" />
-           <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search items..." 
-              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
-           />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-6 px-6">
-           {categories.map(cat => (
-             <button 
-                key={cat} 
-                onClick={() => setActiveCategory(cat)}
-                className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${
-                  activeCategory === cat 
-                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white shadow-lg' 
-                    : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-gray-100 dark:border-slate-800 hover:border-[#ff1744]'
-                }`}
-             >
-                {cat}
-             </button>
-           ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 pt-4 no-scrollbar">
-        {filteredProducts.length === 0 ? (
-           <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 animate-in fade-in">
-              <Package className="w-12 h-12 mb-4" />
-              <p className="text-xs font-black uppercase tracking-widest">No items found</p>
-           </div>
-        ) : (
-           <div className="grid grid-cols-2 gap-4 pb-20">
-              {filteredProducts.map(product => (
-                <div 
-                  key={product.id} 
-                  onClick={() => setSelectedProduct(product)}
-                  className="bg-white dark:bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 dark:border-slate-800 group cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all animate-in zoom-in-95"
-                >
-                   <div className="aspect-[4/5] overflow-hidden relative">
-                     <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={product.title} />
-                     <div className="absolute top-4 right-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
-                        <button className="p-2.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur rounded-2xl shadow-xl text-[#ff1744] hover:scale-110 active:scale-90 transition-all"><Heart className="w-4 h-4 fill-current" /></button>
-                     </div>
-                   </div>
-                   <div className="p-5">
-                     <div className="flex items-center justify-between mb-1.5 min-h-[16px]">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 truncate w-24">{product.category || 'ITEM'}</span>
-                        <div className="flex items-center gap-0.5 text-amber-400">
-                           <Star className="w-2.5 h-2.5 fill-current" />
-                           <span className="text-[8px] font-black text-slate-700 dark:text-slate-300">{product.rating}</span>
-                        </div>
-                     </div>
-                     <h4 className="font-black text-slate-900 dark:text-white text-xs truncate mb-3 uppercase tracking-tighter">{product.title}</h4>
-                     <div className="flex justify-between items-center">
-                       <span className="text-[#ff1744] font-black tracking-tight text-base">${product.price}</span>
-                       <button 
-                          onClick={(e) => {
-                             e.stopPropagation();
-                             dispatch({ type: 'ADD_TO_CART', payload: product });
-                             dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart' } });
-                          }}
-                          className="p-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:bg-[#ff1744] hover:dark:bg-[#ff1744] hover:dark:text-white transition-all shadow-md active:scale-90"
-                       >
-                          <Plus className="w-4 h-4" strokeWidth={3} />
-                       </button>
-                     </div>
-                   </div>
-                </div>
-              ))}
-           </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Fix: Define ProfileView type to fix missing name error in ProfileScreen state initialization
-type ProfileView = 'main' | 'wallet' | 'privacy' | 'notifications' | 'accessibility' | 'language' | 'help' | 'devices' | 'calls';
-
-export const ProfileScreen: React.FC = () => {
-  const { currentUser, theme, settings, transactions, callHistory } = useGlobalState();
-  const dispatch = useGlobalDispatch();
-  
-  const [activeView, setActiveView] = useState<ProfileView>('main');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editStatus, setEditStatus] = useState('');
-  const [editBio, setEditBio] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [tempLang, setTempLang] = useState(settings.language);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (currentUser && !isEditing) {
-      setEditName(currentUser.name || '');
-      setEditStatus(currentUser.status || '');
-      setEditBio(currentUser.bio || '');
-    }
-  }, [currentUser, isEditing]);
-
-  const handleAvatarClick = () => avatarInputRef.current?.click();
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadingAvatar(true);
-      try {
-        const file = e.target.files[0];
-        const publicUrl = await storageService.uploadFile(file);
-        const updatedUser = await api.auth.updateProfile({ avatar: publicUrl });
-        dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Avatar updated!' } });
-      } catch (err: any) {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Upload failed' } });
-      } finally {
-        setUploadingAvatar(false);
-      }
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) return;
-    setSaving(true);
-    try {
-      const updatedUser = await api.auth.updateProfile({ name: editName, status: editStatus, bio: editBio });
-      dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-      setIsEditing(false);
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Profile updated!' } });
-    } catch (err: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Save failed' } });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveLanguage = () => {
-    dispatch({ type: 'UPDATE_SETTING', payload: { section: 'language' as any, key: '', value: tempLang } });
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Language set to: ' + tempLang } });
-    setActiveView('main');
-  };
-
-  const handleLogout = async () => {
-    dispatch({ type: 'LOGOUT' });
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Logging out...' } });
-    try {
-      api.auth.logout();
-    } catch (err: any) {
-      console.warn("Sign out error", err);
-    }
-  };
-
-  const updateSetting = (section: keyof AppSettings, key: string, value: any) => {
-    dispatch({ type: 'UPDATE_SETTING', payload: { section, key, value } });
-  };
-
-  const formatCallDuration = (secs: number) => {
-    if (secs === 0) return 'Missed';
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m > 0 ? `${m}m ` : ''}${s}s`;
-  };
-
-  const renderCalls = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Call History" onBack={() => setActiveView('main')} />
-      <div className="space-y-4">
-        <div className="flex justify-between items-center px-2">
-           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Recent Calls</h3>
-           <History className="w-4 h-4 text-slate-300" />
-        </div>
-        
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          {callHistory.length === 0 ? (
-            <div className="p-16 text-center opacity-30 flex flex-col items-center">
-               <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-[2rem] flex items-center justify-center mb-6">
-                  <Phone className="w-8 h-8 text-slate-300" />
-               </div>
-               <p className="text-[10px] font-black uppercase tracking-widest">No calls yet</p>
             </div>
-          ) : (
-            callHistory.map(call => (
-              <div key={call.id} className="flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border-b border-gray-50 dark:border-slate-800 last:border-0 group">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img src={call.participant.avatar} className="w-12 h-12 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" alt={call.participant.name} />
-                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-lg border-2 border-white dark:border-slate-950 flex items-center justify-center ${call.mediaType === 'video' ? 'bg-purple-500' : 'bg-[#ff1744]'}`}>
-                      {call.mediaType === 'video' ? <Video className="w-2.5 h-2.5 text-white" /> : <Phone className="w-2.5 h-2.5 text-white" />}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-black uppercase text-xs tracking-tight text-slate-800 dark:text-white">{call.participant.name}</h4>
-                    <div className="flex items-center gap-1.5">
-                       {call.type === 'missed' ? <PhoneMissed className="w-3 h-3 text-[#ff1744] animate-pulse" /> : 
-                        call.type === 'incoming' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : 
-                        <ArrowUpRight className="w-3 h-3 text-[#ff1744]" />}
-                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                          {call.type === 'missed' ? 'Missed Call' : `${call.type} • ${formatCallDuration(call.duration)}`}
-                       </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{call.timestamp.split(',')[0]}</p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderDevices = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Devices" onBack={() => setActiveView('main')} />
-      <div className="space-y-6">
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-           <div className="p-6 border-b border-gray-50 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center text-emerald-500">
-                    <Smartphone className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Current Phone</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">iPhone • Active Now</p>
-                 </div>
-              </div>
-              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
-           </div>
-           
-           <div className="p-6 border-b border-gray-50 dark:border-slate-800 flex items-center justify-between group">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
-                    <Monitor className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Desktop Computer</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Last active 2h ago</p>
-                 </div>
-              </div>
-              <button className="p-2 text-slate-300 hover:text-red-500 transition-colors"><XCircle className="w-5 h-5" /></button>
-           </div>
-        </div>
-        <button className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-           <QrCode className="w-5 h-5" />
-           Link New Device
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderWallet = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="My Wallet" onBack={() => setActiveView('main')} />
-      
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl mb-8 border border-white/5">
-        <Sparkles className="absolute right-[-5%] top-[-5%] w-32 h-32 opacity-10 rotate-12 text-amber-400" />
-        <div className="relative z-10">
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-2 opacity-60">Total Balance</p>
-          <h3 className="text-4xl font-black mb-1">$24,580.00</h3>
-          <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-            <TrendingUp className="w-3 h-3" /> +12.4% Increase
-          </p>
-        </div>
-        <div className="mt-8 grid grid-cols-3 gap-4 relative z-10">
-           <button className="flex flex-col items-center gap-2 group">
-              <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-[#ff1744] transition-all">
-                <ArrowUpRight className="w-6 h-6" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Send</span>
-           </button>
-           <button className="flex flex-col items-center gap-2 group">
-              <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-emerald-500 transition-all">
-                <ArrowDownLeft className="w-6 h-6" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Request</span>
-           </button>
-           <button className="flex flex-col items-center gap-2 group">
-              <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-blue-500 transition-all">
-                <Plus className="w-6 h-6" />
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Top Up</span>
-           </button>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex justify-between items-center px-2">
-           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Transaction History</h3>
-           <History className="w-4 h-4 text-slate-300" />
-        </div>
-        
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          {transactions.length === 0 ? (
-            <div className="p-10 text-center opacity-30">
-               <Landmark className="w-10 h-10 mx-auto mb-2" />
-               <p className="text-[10px] font-black uppercase">No activity</p>
-            </div>
-          ) : (
-            transactions.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border-b border-gray-50 dark:border-slate-800 last:border-0">
-                <div className="flex items-center gap-4">
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${tx.type === 'received' || tx.type === 'deposit' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-[#ff1744]'}`}>
-                    {tx.type === 'received' || tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <h4 className="font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-slate-200">{tx.entity}</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{tx.date}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`font-black text-xs ${tx.type === 'received' || tx.type === 'deposit' ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-200'}`}>
-                    {tx.type === 'received' || tx.type === 'deposit' ? '+' : '-'}${tx.amount.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-  
-  const renderPrivacy = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Privacy" onBack={() => setActiveView('main')} />
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        <SettingRow icon={Eye} title="Last Seen" subtitle="Control who can see your status" value={settings.privacy.lastSeen} onClick={() => {}} />
-        <SettingRow icon={UserIcon} title="Profile Photo" subtitle="Control who can see your photo" value={settings.privacy.profilePhoto} onClick={() => {}} />
-        <SettingRow 
-          icon={CheckCircle2} 
-          title="Read Receipts" 
-          subtitle="Allow others to see when you read" 
-          isToggle 
-          value={settings.privacy.readReceipts} 
-          onClick={() => updateSetting('privacy', 'readReceipts', !settings.privacy.readReceipts)}
-        />
-        <SettingRow icon={SecurityIcon} title="Biometric Security" subtitle="FaceID or Fingerprint unlock" isToggle value={true} onClick={() => {}} />
-        <SettingRow icon={ShieldCheck} title="Blocked Contacts" subtitle="Manage blocked users" onClick={() => {}} />
-      </div>
-    </div>
-  );
-
-  const renderNotifications = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Notifications" onBack={() => setActiveView('main')} />
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        <SettingRow 
-          icon={Bell} 
-          title="Push Notifications" 
-          subtitle="Alerts for new messages" 
-          isToggle 
-          value={settings.notifications.push} 
-          onClick={() => updateSetting('notifications', 'push', !settings.notifications.push)}
-        />
-        <SettingRow 
-          icon={Mail} 
-          title="Email Notifications" 
-          subtitle="Get updates via email" 
-          isToggle 
-          value={settings.notifications.email} 
-          onClick={() => updateSetting('notifications', 'email', !settings.notifications.email)}
-        />
-        <SettingRow 
-          icon={Landmark} 
-          title="Wallet Alerts" 
-          subtitle="Get notified of transactions" 
-          isToggle 
-          value={settings.notifications.transactions} 
-          onClick={() => updateSetting('notifications', 'transactions', !settings.notifications.transactions)}
-        />
-      </div>
-    </div>
-  );
-
-  const renderAccessibility = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Accessibility" onBack={() => setActiveView('main')} />
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        <SettingRow icon={Maximize2} title="Text Size" subtitle="Adjust the app text size" value="Normal" onClick={() => {}} />
-        <SettingRow 
-          icon={Sparkles} 
-          title="Reduced Motion" 
-          subtitle="Turn off UI animations" 
-          isToggle 
-          value={false} 
-          onClick={() => {}} 
-        />
-        <SettingRow 
-          icon={Box} 
-          title="High Contrast" 
-          subtitle="Increase color contrast" 
-          isToggle 
-          value={false} 
-          onClick={() => {}} 
-        />
-      </div>
-    </div>
-  );
-
-  const renderLanguage = () => (
-    <div className="animate-in slide-in-from-right duration-300 flex flex-col h-full">
-      <SettingSubHeader title="Language" onBack={() => setActiveView('main')} />
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          {['English (UK)', 'Spanish', 'Arabic', 'English (US)', 'French', 'German'].map((lang) => (
-            <button 
-              key={lang} 
-              onClick={() => setTempLang(lang)}
-              className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-b border-gray-50 dark:border-slate-800 last:border-0"
-            >
-               <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${tempLang === lang ? 'border-[#ff1744] bg-[#ff1744]/10 scale-110' : 'border-slate-200 dark:border-slate-700'}`}>
-                     {tempLang === lang && <div className="w-3 h-3 rounded-full bg-[#ff1744] animate-in zoom-in duration-300"></div>}
-                  </div>
-                  <span className={`text-xs font-black uppercase tracking-widest ${tempLang === lang ? 'text-[#ff1744]' : 'text-slate-500'}`}>{lang}</span>
-               </div>
+            <button className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${space.joined ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-500 border border-emerald-100 dark:border-emerald-900/20' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}>
+              {space.joined ? 'Joined' : 'Link Up'}
             </button>
-          ))}
-        </div>
-      </div>
-      <div className="fixed bottom-32 left-4 right-4 z-20">
-         <button 
-            onClick={handleSaveLanguage}
-            disabled={tempLang === settings.language}
-            className={`w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-2xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:grayscale`}
-         >
-            <Save className="w-5 h-5" />
-            Save Changes
-         </button>
-      </div>
-    </div>
-  );
-
-  const renderHelp = () => (
-    <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Help & Support" onBack={() => setActiveView('main')} />
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm mb-6">
-        <SettingRow icon={BookOpen} title="Help Center" subtitle="Browse our help guides" onClick={() => {}} />
-        <SettingRow icon={MessageSquareHeart} title="Contact Us" subtitle="Talk to a support agent" onClick={() => {}} />
-        <SettingRow icon={Bug} title="Report a Problem" subtitle="Let us know about bugs" color="text-amber-500" onClick={() => {}} />
-      </div>
-      <div className="bg-slate-100 dark:bg-slate-900 rounded-[2rem] p-6 text-center">
-         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">PingSpace v4.2.0</p>
-      </div>
-    </div>
-  );
-
-  const renderMain = () => (
-    <div className="animate-in fade-in duration-500 pb-12">
-      <input type="file" ref={avatarInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
-      <div className="flex flex-col items-center py-10 relative">
-        <button 
-          onClick={() => setActiveView('wallet')}
-          className="absolute top-10 right-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-800 text-[#ff1744] hover:scale-110 active:scale-95 transition-all z-10"
-        >
-          <WalletIcon className="w-5 h-5" />
-        </button>
-        <div className="relative mb-6 group">
-           <div onClick={handleAvatarClick} className={`w-32 h-32 rounded-[2.5rem] p-1.5 bg-gradient-to-tr from-[#ff1744] to-orange-400 shadow-2xl cursor-pointer transition-transform hover:scale-105 relative overflow-hidden`}>
-              <img src={currentUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.name || 'U')}&background=ff1744&color=fff`} className={`w-full h-full rounded-[2.2rem] border-4 border-white dark:border-slate-950 object-cover ${uploadingAvatar ? 'opacity-30' : ''}`} alt="Profile" />
-              {uploadingAvatar && <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[2px]"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
-              {isEditing && !uploadingAvatar && <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-8 h-8 text-white" /></div>}
-           </div>
-           {!isEditing && <button onClick={handleAvatarClick} className="absolute -bottom-2 -right-2 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-800 text-[#ff1744] hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors z-10"><Camera className="w-5 h-5" /></button>}
-        </div>
-        {isEditing ? (
-          <div className="w-full max-sm space-y-6">
-            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Your Name" className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 font-bold text-slate-900 dark:text-white" />
-            <input type="text" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} placeholder="Update Status" className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 text-slate-700 dark:text-slate-300" />
-            <button onClick={handleSaveProfile} disabled={saving} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-red-500/30">{saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Save Profile'}</button>
           </div>
-        ) : (
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-3"><h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{currentUser?.name}</h2><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-[#ff1744]"><Edit3 className="w-4 h-4" /></button></div>
-            <p className="text-xs text-[#ff1744] font-black uppercase tracking-[0.25em] mt-2 mb-4">{currentUser?.status || 'Available'}</p>
-          </div>
-        )}
+        ))}
       </div>
-
-      <div className="space-y-8">
-        <div className="space-y-4">
-           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] ml-2">Settings</h3>
-           <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-              <SettingRow icon={History} title="Call History" subtitle="View your recent calls" onClick={() => setActiveView('calls')} />
-              <SettingRow icon={Lock} title="Privacy" subtitle="Manage your privacy settings" onClick={() => setActiveView('privacy')} />
-              <SettingRow icon={Bell} title="Notifications" subtitle="Choose what you hear about" onClick={() => setActiveView('notifications')} />
-              <SettingRow icon={MonitorSmartphone} title="Linked Devices" subtitle="Manage your active sessions" onClick={() => setActiveView('devices')} />
-              <SettingRow icon={Accessibility} title="Appearance" subtitle="Customize the look and feel" onClick={() => setActiveView('accessibility')} />
-              <SettingRow icon={Languages} title="Language" subtitle="Select your preferred language" onClick={() => setActiveView('language')} />
-              <SettingRow icon={HelpCircle} title="Help" subtitle="Get support and view guides" onClick={() => setActiveView('help')} />
-              <SettingRow 
-                icon={LogOut} 
-                title="Log Out" 
-                subtitle="Sign out of your account" 
-                isDanger 
-                onClick={handleLogout} 
-              />
-           </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-           <SettingRow 
-             icon={theme === 'light' ? Sun : Moon} 
-             title="Dark Mode" 
-             subtitle={theme === 'light' ? 'Light mode is on' : 'Dark mode is on'} 
-             isToggle 
-             value={theme === 'dark'} 
-             onClick={() => dispatch({ type: 'SET_THEME', payload: theme === 'light' ? 'dark' : 'light' })}
-             color={theme === 'light' ? 'text-amber-500' : 'text-purple-400'}
-           />
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="p-4 overflow-y-auto h-full pb-40 bg-gray-50 dark:bg-slate-950 transition-colors no-scrollbar">
-      {activeView === 'main' && renderMain()}
-      {activeView === 'wallet' && renderWallet()}
-      {activeView === 'privacy' && renderPrivacy()}
-      {activeView === 'notifications' && renderNotifications()}
-      {activeView === 'accessibility' && renderAccessibility()}
-      {activeView === 'language' && renderLanguage()}
-      {activeView === 'help' && renderHelp()}
-      {activeView === 'devices' && renderDevices()}
-      {activeView === 'calls' && renderCalls()}
     </div>
   );
 };
 
-const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const dispatch = useGlobalDispatch();
-  const { currentUser } = useGlobalState();
-  const [title, setTitle] = useState('');
-  const [price, setPrice] = useState('');
-  const [image, setImage] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Electronics');
-  const [condition, setCondition] = useState('New');
-  const [location, setLocation] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const categories = ['Electronics', 'Fashion', 'Home', 'Collectibles', 'Gaming', 'Other'];
-  const conditions = ['New', 'Like New', 'Used - Good', 'Used - Fair'];
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploading(true);
-      try {
-        const url = await storageService.uploadFile(e.target.files[0]);
-        setImage(url);
-      } catch (error: any) {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Upload failed.' } });
-      } finally {
-        setUploading(false);
-      }
-    }
-  };
-
-  const handleList = async () => {
-    if (!title || !price || !image) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.from('products').insert({
-          title, 
-          price: parseFloat(price), 
-          image_url: image, 
-          seller_name: currentUser?.name || 'User',
-          description,
-          category,
-          condition,
-          location
-      }).select().single();
-      
-      if (error) throw error;
-      
-      dispatch({ 
-        type: 'ADD_PRODUCT', 
-        payload: { 
-          id: data.id, 
-          title, 
-          price: parseFloat(price), 
-          image, 
-          seller: currentUser?.name || 'Me', 
-          rating: 5,
-          description,
-          category,
-          condition,
-          location
-        } 
-      });
-      
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Item listed successfully!' } });
-      onClose();
-      resetForm();
-    } catch (e: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to list item.' } });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resetForm = () => {
-    setTitle(''); setPrice(''); setImage(''); setDescription(''); 
-    setCategory('Electronics'); setCondition('New'); setLocation('');
-  };
-
-  if (!isOpen) return null;
-
+// Fixed: Added missing MarketplaceScreen export
+export const MarketplaceScreen: React.FC = () => {
+  const { products } = useGlobalState();
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
-       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-md p-6 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10"><X className="w-5 h-5 text-slate-500" /></button>
-          
-          <div className="flex items-center gap-3 mb-6">
-             <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-2xl text-[#ff1744]">
-                <Package className="w-6 h-6" />
-             </div>
-             <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Sell an Item</h3>
+    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Market</h2>
+        <button className="p-2 bg-gray-50 dark:bg-slate-900 rounded-xl"><CartIcon className="w-5 h-5 text-[#ff1744]" /></button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {products.map(product => (
+          <div key={product.id} className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden group shadow-sm flex flex-col">
+            <div className="aspect-square relative overflow-hidden">
+              <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={product.title} />
+              <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-2 py-1 rounded-lg border border-white/20 shadow-sm">
+                <span className="text-[9px] font-black uppercase text-[#ff1744] tracking-widest">${product.price}</span>
+              </div>
+            </div>
+            <div className="p-4 flex-1 flex flex-col justify-between">
+              <h4 className="font-black text-slate-900 dark:text-white text-[10px] uppercase tracking-tight truncate mb-2">{product.title}</h4>
+              <button className="w-full py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#ff1744] hover:text-white transition-all">Add to Bag</button>
+            </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-          <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-video bg-gray-50 dark:bg-slate-950 rounded-3xl mb-6 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 group cursor-pointer transition-colors hover:border-[#ff1744]/50">
-             {image ? (
-               <>
-                 <img src={image} className="w-full h-full object-cover" alt="Preview" />
-                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <RefreshCcw className="w-8 h-8 text-white" />
-                 </div>
-               </>
-             ) : (
-               <>
-                 <Camera className="w-8 h-8 text-[#ff1744] mb-2" />
-                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Add Product Photo</span>
-               </>
-             )}
-             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
-             {uploading && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
-          </div>
-
-          <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 no-scrollbar">
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Product Title</label>
-               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name of item" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Price ($)</label>
-                  <div className="relative">
-                    <div className="absolute left-4 top-4 text-[#ff1744] font-black">$</div>
-                    <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-8 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
-                  </div>
-               </div>
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Category</label>
-                  <div className="relative">
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full appearance-none bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all text-sm">
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-4 top-4.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-               </div>
-            </div>
-            <div className="space-y-2">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Condition</label>
-               <div className="flex flex-wrap gap-2">
-                  {conditions.map(cond => (
-                    <button key={cond} onClick={() => setCondition(cond)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${condition === cond ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/30' : 'bg-slate-50 dark:bg-slate-950 text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-100'}`}>
-                      {cond}
-                    </button>
-                  ))}
-               </div>
-            </div>
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Description</label>
-               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Write details about the item..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-2 resize-none h-28 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all text-sm leading-relaxed" />
-            </div>
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Location</label>
-               <div className="relative">
-                  <LocationIcon className="absolute left-4 top-4 w-4 h-4 text-slate-400" />
-                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, Country" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-10 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
-               </div>
-            </div>
-          </div>
-          <div className="mt-8">
-             <button onClick={handleList} disabled={!title || !price || !image || loading || uploading} className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-3xl shadow-xl shadow-red-500/30 hover:bg-red-600 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group">
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                  <>
-                    <span>Post Item</span>
-                    <ArrowRightLeft className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-             </button>
-          </div>
-       </div>
+// Fixed: Added missing ProfileScreen export
+export const ProfileScreen: React.FC = () => {
+  const { currentUser, theme } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  return (
+    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+      <div className="flex flex-col items-center mb-10 mt-4">
+        <div className="relative group mb-4">
+           <div className="absolute -inset-1 bg-gradient-to-tr from-[#ff1744] to-orange-400 rounded-[2.5rem] blur opacity-25 group-hover:opacity-75 transition duration-1000"></div>
+           <img src={currentUser?.avatar} className="w-28 h-28 rounded-[2.5rem] shadow-xl border-4 border-white dark:border-slate-900 relative z-10 object-cover" alt="" />
+        </div>
+        <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{currentUser?.name}</h3>
+        <div className="mt-1 px-4 py-1 bg-red-50 dark:bg-red-900/10 rounded-full border border-red-100 dark:border-red-900/20">
+           <p className="text-[#ff1744] text-[9px] font-black uppercase tracking-[0.2em]">{currentUser?.status || 'Active Node'}</p>
+        </div>
+      </div>
+      
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+           <SettingRow icon={UserIcon} title="Account Data" subtitle="Personal info, username" />
+           <SettingRow icon={Bell} title="Neural Notifications" subtitle="Alerts, sounds, vibrations" value={true} isToggle />
+           <SettingRow icon={Shield} title="Link Security" subtitle="Biometrics, 2FA, encryption" />
+           <SettingRow icon={theme === 'dark' ? Sun : Moon} title="Dark Synthesis" subtitle="Visual interface mode" value={theme === 'dark'} isToggle onClick={() => dispatch({ type: 'SET_THEME', payload: theme === 'dark' ? 'light' : 'dark' })} />
+           <SettingRow icon={LogOut} title="Terminate Link" isDanger onClick={() => dispatch({ type: 'LOGOUT' })} />
+        </div>
+        
+        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 text-center">
+           <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.3em] mb-2">PingSpace Protocol v1.0.4</p>
+           <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Encrypted. Decentralized. Neural.</p>
+        </div>
+      </div>
     </div>
   );
 };

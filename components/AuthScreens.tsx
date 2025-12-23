@@ -375,8 +375,9 @@ export const SignupScreen: React.FC<AuthProps> = ({ onNavigate }) => {
     setLoading(true);
     try {
       await api.auth.signup(formData);
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Account created! Please check your email to verify.' } });
-      onNavigate();
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Welcome to PingSpace! Account created successfully.' } });
+      // Since confirmation is disabled, auth listener in App.tsx will handle redirection to main screen if session is returned.
+      // If no session is returned immediately, they will stay here briefly then be pulled in.
     } catch (error: any) {
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: error.message || 'Signup failed.' } });
     } finally { setLoading(false); }

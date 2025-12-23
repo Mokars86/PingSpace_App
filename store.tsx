@@ -188,6 +188,13 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       };
     }
 
+    case 'DELETE_CHAT':
+      return {
+        ...state,
+        chats: state.chats.filter(c => c.id !== action.payload),
+        selectedChatId: state.selectedChatId === action.payload ? null : state.selectedChatId
+      };
+
     case 'ADD_TRANSACTION':
       return {
         ...state,
@@ -216,6 +223,12 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       return {
         ...state,
         stories: [action.payload, ...state.stories]
+      };
+
+    case 'DELETE_STORY':
+      return {
+        ...state,
+        stories: state.stories.filter(s => s.id !== action.payload)
       };
 
     case 'ADD_SPACE':

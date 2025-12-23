@@ -214,7 +214,7 @@ const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: U
         <div className="p-4 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input type="text" placeholder="Search contacts..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all font-medium" />
+            <input type="text" placeholder="Search contacts..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl py-3.5 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all font-medium" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
@@ -269,7 +269,21 @@ const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: U
 
 export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectChat }) => {
   const [showNewChat, setShowNewChat] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all');
   const dispatch = useGlobalDispatch();
+
+  const filteredChats = useMemo(() => {
+    return chats.filter(chat => {
+      const matchesSearch = 
+        chat.participant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (typeof chat.lastMessage === 'string' && chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesFilter = filterMode === 'all' || (filterMode === 'unread' && chat.unread > 0);
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [chats, searchQuery, filterMode]);
 
   const handleContactSelect = async (userId: string) => {
     if (userId === 'ping-ai') { onSelectChat('ping-ai-session'); return; }
@@ -298,14 +312,60 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
     }
   };
 
+  const handleDeleteChat = (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this chat history? This cannot be undone.")) {
+      dispatch({ type: 'DELETE_CHAT', payload: chatId });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Chat deleted' } });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full pb-20 overflow-y-auto bg-gray-50 dark:bg-slate-950 transition-colors relative no-scrollbar">
       <NewChatModal isOpen={showNewChat} onClose={() => setShowNewChat(false)} contacts={contacts} onSelect={handleContactSelect} />
+      
+      <div className="px-4 pt-4 pb-2 space-y-4">
+        <div className="relative group">
+           <Search className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${searchQuery ? 'text-[#ff1744]' : 'text-slate-400 group-focus-within:text-[#ff1744]'}`} />
+           <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search conversations..." 
+              className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-10 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
+           />
+           {searchQuery && (
+             <button onClick={() => setSearchQuery('')} className="absolute right-4 top-3.5 text-slate-300 hover:text-slate-500 dark:hover:text-white transition-colors">
+               <X className="w-5 h-5" />
+             </button>
+           )}
+        </div>
+
+        <div className="flex items-center justify-between px-1">
+           <div className="flex gap-2">
+              <button 
+                onClick={() => setFilterMode('all')}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${filterMode === 'all' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-transparent text-slate-400'}`}
+              >
+                All
+              </button>
+              <button 
+                onClick={() => setFilterMode('unread')}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${filterMode === 'unread' ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20' : 'bg-transparent text-slate-400'}`}
+              >
+                Unread
+                {chats.some(c => c.unread > 0) && <div className="w-1.5 h-1.5 rounded-full bg-current"></div>}
+              </button>
+           </div>
+           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{filteredChats.length} Conversations</span>
+        </div>
+      </div>
+
       <div className="px-4 py-4">
         <h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase mb-3 tracking-[0.2em] px-1">Pinned Chats</h3>
         <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-2 px-2">
           {chats.filter(c => c.isPinned).map(chat => (
-            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex flex-col items-center min-w-[64px] cursor-pointer group">
+            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex flex-col items-center min-w-[64px] cursor-pointer group animate-in zoom-in duration-300">
               <div className="relative">
                 <div className="p-0.5 rounded-full bg-gradient-to-tr from-[#ff1744] to-red-400">
                   <img src={chat.participant.avatar} alt={chat.participant.name} className="w-14 h-14 rounded-full border-2 border-white dark:border-slate-800 shadow-md object-cover" />
@@ -319,35 +379,91 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
           {chats.filter(c => c.isPinned).length === 0 && <div className="py-2 opacity-30 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2">No pinned chats</div>}
         </div>
       </div>
+
       <div className="px-4 py-2 flex-1 bg-white dark:bg-slate-900 rounded-t-[3rem] shadow-[0_-10px_40px_rgba(0,0,0,0.04)] min-h-[500px]">
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-800 rounded-full mx-auto my-3 mb-6"></div>
-        <div className="flex justify-between items-center mb-4 px-2"><h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Recent Messages</h3><Filter className="w-4 h-4 text-slate-300" /></div>
+        <div className="flex justify-between items-center mb-4 px-2">
+           <h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Recent Messages</h3>
+           <Filter className="w-4 h-4 text-slate-300" />
+        </div>
         <div className="space-y-1">
-          {chats.map(chat => (
-            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 p-3 rounded-3xl transition-all duration-300 active:scale-[0.98] group">
-              <div className="flex items-center gap-4">
-                <div className="relative">
+          {filteredChats.map(chat => (
+            <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 p-3 rounded-3xl transition-all duration-300 active:scale-[0.98] group relative">
+              <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                <div className="relative shrink-0">
                   <img src={chat.participant.avatar} alt={chat.participant.name} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
                   {chat.isPinned && <Pin className="absolute -top-1 -left-1 w-4 h-4 text-[#ff1744] fill-[#ff1744]" />}
                 </div>
-                <div className="overflow-hidden">
-                  <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 uppercase tracking-tight">{chat.participant.name}{chat.isGroup && <Users className="w-3 h-3 text-[#ff1744]" />}</h4>
-                  <p className={`text-sm truncate w-48 font-medium ${chat.unread > 0 ? 'text-slate-900 dark:text-white font-black' : 'text-gray-400 dark:text-slate-500'}`}>{typeof chat.lastMessage === 'string' ? chat.lastMessage : 'Media message'}</p>
+                <div className="overflow-hidden flex-1">
+                  <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 uppercase tracking-tight truncate">
+                    {chat.participant.name}
+                    {chat.isGroup && <Users className="w-3 h-3 text-[#ff1744]" />}
+                  </h4>
+                  <p className={`text-sm truncate w-full font-medium ${chat.unread > 0 ? 'text-slate-900 dark:text-white font-black' : 'text-gray-400 dark:text-slate-500'}`}>
+                    {typeof chat.lastMessage === 'string' ? chat.lastMessage : 'Media message'}
+                  </p>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1.5">
+              <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
                 <div className="flex items-center gap-2">
-                  <button onClick={(e) => handleTogglePin(e, chat)} className="p-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-[#ff1744]/10 text-[#ff1744]">{chat.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}</button>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => handleTogglePin(e, chat)} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-[#ff1744]">
+                      {chat.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                    </button>
+                    <button onClick={(e) => handleDeleteChat(e, chat.id)} className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-300 hover:text-red-500">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                   <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{chat.lastTime}</span>
                 </div>
-                {chat.unread > 0 && <div className="px-2 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">{chat.unread}</div>}
+                {chat.unread > 0 && (
+                   <div className="px-2 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 animate-bounce">
+                     {chat.unread}
+                   </div>
+                )}
               </div>
             </div>
           ))}
-          {chats.length === 0 && <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center"><div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><MessageCircle className="w-8 h-8 text-gray-300" /></div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">No active chats</p></div>}
+          {filteredChats.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center animate-in fade-in">
+              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-[2.5rem] flex items-center justify-center mb-4">
+                 {searchQuery ? <Search className="w-8 h-8 text-gray-300" /> : <MessageCircle className="w-8 h-8 text-gray-300" />}
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                {searchQuery ? `No results for "${searchQuery}"` : 'No active chats'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
       <button onClick={() => setShowNewChat(true)} className="fixed bottom-24 right-6 w-16 h-16 bg-[#ff1744] rounded-[2rem] shadow-2xl shadow-red-500/40 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all z-10"><Plus className="w-8 h-8" /></button>
+    </div>
+  );
+};
+
+const SendMoneyChatModal: React.FC<{ isOpen: boolean; onClose: () => void; onSend: (amount: number) => void }> = ({ isOpen, onClose, onSend }) => {
+  const [amount, setAmount] = useState('');
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-xs p-8 shadow-2xl animate-in zoom-in-95 border border-white/10">
+        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2 text-center">Send Money</h3>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-8">Enter amount to transfer</p>
+        <div className="relative mb-8">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-[#ff1744]">$</span>
+          <input 
+            type="number" 
+            value={amount} 
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-[#ff1744] rounded-2xl py-6 pl-10 pr-4 text-3xl font-black text-slate-900 dark:text-white text-center outline-none transition-all"
+            placeholder="0"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="py-4 bg-gray-100 dark:bg-slate-800 text-slate-500 font-bold rounded-2xl uppercase tracking-widest text-[10px]">Cancel</button>
+          <button onClick={() => { onSend(Number(amount)); onClose(); }} className="py-4 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 uppercase tracking-widest text-[10px]">Send</button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -359,27 +475,6 @@ interface ChatWindowProps {
   onSendMessage: (sessionId: string, text: string, type?: Message['type'], metadata?: any, replyTo?: Message['replyTo'], expiresAt?: number) => void;
   onBotResponse: (sessionId: string, text: string) => void;
 }
-
-const SendMoneyChatModal: React.FC<{ isOpen: boolean; onClose: () => void; onSend: (amount: number) => void }> = ({ isOpen, onClose, onSend }) => {
-  const [amount, setAmount] = useState('');
-  const [pin, setPin] = useState('');
-  const [step, setStep] = useState<'amount' | 'pin'>('amount');
-  if (!isOpen) return null;
-  const handleNext = () => { if (amount && parseFloat(amount) > 0) setStep('pin'); };
-  const handleConfirm = () => { if (pin.length === 4) { onSend(parseFloat(amount)); onClose(); setAmount(''); setPin(''); setStep('amount'); } };
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-       <div className="bg-white dark:bg-slate-900 w-full max-w-xs rounded-[3rem] p-8 shadow-2xl animate-in zoom-in-95 border border-white/10">
-          <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Send Money</h3><button onClick={onClose} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full"><X className="w-4 h-4 text-gray-400" /></button></div>
-          {step === 'amount' ? (
-            <div className="space-y-8"><div className="relative text-center"><span className="absolute left-0 top-0 text-2xl font-black text-[#ff1744]">$</span><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-transparent text-center text-6xl font-black text-slate-900 dark:text-white focus:outline-none placeholder-slate-200 dark:placeholder-slate-800" placeholder="0" autoFocus /></div><button onClick={handleNext} disabled={!amount} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs">Continue</button></div>
-          ) : (
-            <div className="space-y-8 text-center"><p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Enter PIN</p><div className="flex justify-center gap-4">{[1,2,3,4].map((_, i) => (<div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${pin.length > i ? 'bg-[#ff1744] border-[#ff1744] scale-125' : 'border-gray-200 dark:border-slate-700'}`}></div>))}</div><div className="grid grid-cols-3 gap-4">{[1,2,3,4,5,6,7,8,9].map(n => (<button key={n} onClick={() => setPin(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">{n}</button>))}<div className="h-14"></div><button onClick={() => setPin(prev => (prev.length < 4 ? prev + '0' : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">0</button><button onClick={() => setPin(prev => prev.slice(0, -1))} className="h-14 rounded-2xl flex items-center justify-center text-slate-300 hover:text-[#ff1744]"><Trash2 className="w-6 h-6" /></button></div><button onClick={handleConfirm} disabled={pin.length !== 4} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs">Confirm Transfer</button></div>
-          )}
-       </div>
-    </div>
-  );
-};
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onBack, onSendMessage, onBotResponse }) => {
   const dispatch = useGlobalDispatch();
@@ -412,7 +507,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
 
   const isBot = session.participant.id === 'ping-ai';
 
-  // Search Results Tracking
   const matches = useMemo(() => {
     if (!searchQuery.trim() || !isSearching) return [];
     return session.messages
@@ -447,8 +541,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
   const filteredMessages = useMemo(() => {
     let msgs = session.messages;
     if (showStarredOnly) msgs = msgs.filter(m => m.isStarred);
-    // Note: We don't filter the actual list during "Jump Search" to maintain context, 
-    // but the user's previous code filtered them. We'll stick to full context and jump navigation.
     return msgs;
   }, [session.messages, showStarredOnly]);
 

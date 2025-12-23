@@ -212,10 +212,12 @@ export type Action =
   | { type: 'SET_CALL_HISTORY'; payload: CallLog[] }
   | { type: 'ADD_PRODUCT'; payload: Product }
   | { type: 'ADD_STORY'; payload: Story }
+  | { type: 'DELETE_STORY'; payload: string }
   | { type: 'ADD_SPACE'; payload: Space }
   | { type: 'JOIN_SPACE'; payload: string }
   | { type: 'CREATE_GROUP'; payload: ChatSession }
   | { type: 'ADD_CHAT'; payload: ChatSession }
+  | { type: 'DELETE_CHAT'; payload: string }
   | { type: 'SET_DATA'; payload: { chats: ChatSession[], contacts: User[], products: Product[], spaces: Space[], transactions: Transaction[], stories: Story[], callHistory?: CallLog[] } }
   | { type: 'TOGGLE_TASK'; payload: { widgetId: string; taskId: string } }
   | { type: 'TOGGLE_DISAPPEARING_MODE'; payload: { sessionId: string; enabled: boolean } }

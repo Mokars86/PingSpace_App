@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
@@ -8,7 +8,7 @@ import { AlertCircle, RefreshCcw } from 'lucide-react';
 interface Props { children?: ReactNode; }
 interface State { hasError: boolean; error?: Error; }
 
-// Fixed: Explicitly inheriting from React.Component to ensure proper type inference of this.props and avoid shadowing issues
+// Fixed: Explicitly extending React.Component to resolve the issue where this.props was not recognized.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = { hasError: false };
 
@@ -58,7 +58,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Safely accessed this.props through inheritance from React.Component<Props, State>
+    // Fixed: Standard access to this.props.children from React.Component through proper inheritance.
     return this.props.children;
   }
 }
