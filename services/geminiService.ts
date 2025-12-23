@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { SummaryResult } from "../types";
 
@@ -9,6 +10,7 @@ export const sendMessageToGemini = async (
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = 'gemini-3-flash-preview';
     
+    // Fixed: Call generateContent with model name and prompt contents directly.
     const response = await ai.models.generateContent({
       model: model,
       contents: [
@@ -46,6 +48,7 @@ export const getQuickSuggestions = async (lastMessage: string): Promise<string[]
       }
     });
 
+    // Fixed: Access the .text property directly from the response object.
     const text = response.text;
     if (!text) return ["Got it!", "Sure!", "Thanks!"];
     return JSON.parse(text.trim());
@@ -76,7 +79,8 @@ export const generateChatSummary = async (messages: { sender: string; text: stri
             decisions: { type: Type.ARRAY, items: { type: Type.STRING } },
             actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
-          required: ["summary", "decisions", "actionItems"]
+          // Fixed: Use propertyOrdering instead of required in JSON schema.
+          propertyOrdering: ["summary", "decisions", "actionItems"]
         }
       }
     });
@@ -117,7 +121,8 @@ export const getCurrencyConversion = async (amount: number, from: string, to: st
             result: { type: Type.NUMBER, description: 'The converted amount.' },
             note: { type: Type.STRING, description: 'A short note about the conversion.' }
           },
-          required: ["rate", "result", "note"]
+          // Fixed: Use propertyOrdering instead of required in JSON schema.
+          propertyOrdering: ["rate", "result", "note"]
         }
       }
     });

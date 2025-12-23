@@ -3,58 +3,24 @@ import { supabase } from "./supabase";
 import { User, ChatSession, Transaction, Product, Space, Message, Story, CallLog } from '../types';
 import { authService } from './auth';
 
-/**
- * PINGSPACE ULTIMATE DATABASE SETUP (SQL)
- * 
- * -- 1. PROFILES TABLE
- * CREATE TABLE public.profiles (
- *   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
- *   name TEXT,
- *   username TEXT UNIQUE,
- *   avatar TEXT,
- *   email TEXT,
- *   phone TEXT,
- *   status TEXT DEFAULT 'Available',
- *   bio TEXT,
- *   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
- * );
- * 
- * -- 2. CALLS TABLE
- * CREATE TABLE public.calls (
- *   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
- *   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
- *   participant_id UUID REFERENCES public.profiles(id),
- *   type TEXT, -- incoming, outgoing, missed
- *   media_type TEXT, -- audio, video
- *   duration INTEGER, -- in seconds
- *   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
- * );
- * 
- * -- 3. RLS POLICIES (CRITICAL FOR LOGIN)
- * ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
- * CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
- * CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
- * CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
- */
-
 const formatError = (error: any, prefix: string): string => {
   if (!error) return `${prefix}: Unknown error`;
   const message = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
   
   if (message.toLowerCase().includes('email not confirmed')) {
-    return "Verification Required: Please check your email inbox (and spam) for the confirmation link.";
+    return "Verification Required: Please check your email inbox.";
   }
 
   if (message.includes('column') && message.includes('does not exist')) {
-    return `Schema Mismatch: The database is missing a required column. Please check the SQL migration notes in api.ts.`;
+    return `Database Schema Error: Required column missing.`;
   }
 
-  if (message.includes('relation') && message.includes('does not exist')) {
-    return `Database Error: A required table is missing from your Supabase project.`;
+  if (message.toLowerCase().includes('already registered')) {
+    return "This email is already in use. Try logging in instead.";
   }
 
-  if (message.includes('JWT') || message.includes('invalid claim')) {
-    return "Session Expired: Please clear your browser cache/cookies or use the Reset Session tool.";
+  if (message.includes('profiles') && message.includes('policy')) {
+    return "Permission Denied: Your profile couldn't be saved. This usually happens if email verification is required.";
   }
 
   return `${prefix}: ${message}`;
@@ -71,12 +37,10 @@ export const api = {
       };
 
       try {
-        // Check connection & basic session
         const { data: { session }, error: authErr } = await supabase.auth.getSession();
         results.connection = true;
         results.auth = !authErr;
 
-        // Check tables with row count (efficient check for table existence and RLS read permission)
         const checkTable = async (name: string) => {
           try {
             const { error } = await supabase.from(name).select('*', { count: 'exact', head: true }).limit(1);
@@ -107,46 +71,25 @@ export const api = {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(formatError(error, "Login failed"));
 
-      // Get profile with robust fallback
       let profile = null;
       try {
-        const { data: p, error: profileErr } = await supabase
+        const { data: p } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
           .maybeSingle();
         
-        if (p) {
-          profile = p;
-        } else if (!profileErr || profileErr.code === 'PGRST116') {
-          // If no profile exists, attempt creation from metadata
-          const metadata = data.user.user_metadata || {};
-          const { data: newP } = await supabase.from('profiles').insert({
-            id: data.user.id,
-            name: metadata.name || email.split('@')[0],
-            username: metadata.username || `user_${data.user.id.slice(0, 5)}`,
-            avatar: metadata.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
-            email: email
-          }).select().maybeSingle();
-          
-          if (newP) profile = newP;
-        }
+        if (p) profile = p;
       } catch (e) {
-        console.warn("Profile fetch/create failed, using auth metadata instead", e);
+        console.warn("Profile fetch failed during login", e);
       }
 
-      const p = profile as any;
-      return {
-        id: data.user.id,
-        name: p?.name || data.user.user_metadata?.name || 'User',
-        avatar: p?.avatar || data.user.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
-        isOnline: true,
-        status: p?.status || 'Available',
-        bio: p?.bio || ''
-      };
+      return authService.mapUser(data.user, profile);
     },
-    signup: async (form: any): Promise<User> => {
+    signup: async (form: any): Promise<User & { needsVerification?: boolean }> => {
       const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}&background=ff1744&color=fff`;
+      
+      // 1. Attempt Auth Signup
       const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
@@ -159,11 +102,60 @@ export const api = {
           } 
         }
       });
-      if (error) throw new Error(formatError(error, "Signup failed"));
-      if (!data.user) throw new Error("Signup failed: No user returned");
-      return { id: data.user.id, name: form.name, avatar: avatarUrl, isOnline: true };
+      
+      if (error) {
+        if (error.message.toLowerCase().includes('already registered')) {
+          try {
+            return await api.auth.login(form.email, form.password);
+          } catch (loginErr) {
+            throw new Error("Email already registered. Please sign in.");
+          }
+        }
+        throw new Error(formatError(error, "Signup failed"));
+      }
+
+      if (!data.user) throw new Error("Account creation failed: No user returned.");
+
+      // IMPORTANT: If session is null, it means email confirmation is ON.
+      // We cannot write to the profiles table yet because the RLS policy (auth.uid() = id) will fail.
+      if (!data.session) {
+        return {
+          ...authService.mapUser(data.user, { 
+            id: data.user.id, 
+            name: form.name, 
+            avatar: avatarUrl, 
+            status: 'Pending Verification' 
+          }),
+          needsVerification: true
+        };
+      }
+
+      // 2. Create Profile Record (only if already verified/logged in)
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: data.user.id,
+        name: form.name,
+        username: form.username,
+        avatar: avatarUrl,
+        email: form.email,
+        phone: form.phone,
+        status: 'Available',
+        updated_at: new Date().toISOString()
+      });
+      
+      if (profileError) {
+        console.error("Profile creation failed", profileError);
+        // We still return the user because they ARE created in Auth.
+      }
+
+      return authService.mapUser(data.user, { 
+        id: data.user.id, 
+        name: form.name, 
+        avatar: avatarUrl, 
+        status: 'Available' 
+      });
     },
     checkUsernameAvailability: async (username: string): Promise<boolean> => {
+      if (!username || username.length < 3) return false;
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -220,7 +212,7 @@ export const api = {
   contacts: {
     list: async (): Promise<User[]> => {
       try {
-        const { data, error } = await supabase.from('profiles').select('*');
+        const { data, error } = await supabase.from('profiles').select('*').limit(50);
         if (error) throw error;
         return ((data || []) as any[]).map(d => ({ id: d.id, name: d.name, avatar: d.avatar, status: d.status, bio: d.bio, isOnline: false }));
       } catch (e) { return []; }

@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
@@ -8,8 +8,8 @@ import { AlertCircle, RefreshCcw } from 'lucide-react';
 interface Props { children?: ReactNode; }
 interface State { hasError: boolean; error?: Error; }
 
-// Fixed: Explicitly extending React.Component to resolve the issue where this.props was not recognized.
-class ErrorBoundary extends React.Component<Props, State> {
+// Fixed: Explicitly imported and extended Component from react to resolve property access issues during inheritance.
+class ErrorBoundary extends Component<Props, State> {
   public state: State = { hasError: false };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -29,7 +29,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-20 h-20 bg-red-500/20 rounded-[2rem] flex items-center justify-center mb-6 border border-red-500/30 animate-pulse">
+          <div className="w-20 h-20 bg-red-50/20 rounded-[2rem] flex items-center justify-center mb-6 border border-red-500/30 animate-pulse">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
           <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Something went wrong</h1>
@@ -58,7 +58,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Standard access to this.props.children from React.Component through proper inheritance.
+    // Fixed: Standard access to this.props.children, now correctly typed through explicit Component inheritance.
     return this.props.children;
   }
 }

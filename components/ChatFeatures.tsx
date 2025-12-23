@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, Phone, Video, MoreVertical, Send, 
@@ -7,7 +8,8 @@ import {
   Reply, Clock, Heart, Timer, Trash2, Download, ExternalLink, CheckCircle,
   MessageCircle, Zap, Star, ChevronDown, Filter, Settings, Palette,
   Music, File as FileIcon, Navigation, Volume2, StopCircle, Ghost, Flame,
-  Pin, PinOff, Smile, ChevronUp
+  Pin, PinOff, Smile, ChevronUp,
+  Bold, Italic, Strikethrough, Code, Type
 } from 'lucide-react';
 import { User, Message, ChatSession, SummaryResult } from '../types';
 import { sendMessageToGemini, generateChatSummary, getQuickSuggestions } from '../services/geminiService';
@@ -53,16 +55,61 @@ const getDateLabel = (timestamp: number) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const HighlightedText: React.FC<{ text: string; query: string; isCurrentMatch?: boolean }> = ({ text, query, isCurrentMatch }) => {
-  if (!query.trim()) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${query})`, 'gi'));
+// Enhanced: Replaced HighlightedText with RichText to support markdown-style formatting
+const RichText: React.FC<{ text: string; query: string; isCurrentMatch?: boolean }> = ({ text, query, isCurrentMatch }) => {
+  const parseMarkdown = (input: string) => {
+    // Fixed: Replaced (string | JSX.Element)[] with (string | React.ReactNode)[] to resolve "Cannot find namespace JSX" error.
+    let parts: (string | React.ReactNode)[] = [input];
+
+    // 1. Code block ```text```
+    parts = parts.flatMap(p => typeof p !== 'string' ? [p] : p.split(/(```[\s\S]*?```)/g).map(s => {
+      const match = s.match(/^```([\s\S]*?)```$/);
+      return match ? <pre key={Math.random()} className="bg-slate-900 text-slate-100 p-3 rounded-xl font-mono text-[0.85em] my-2 overflow-x-auto border border-white/10 shadow-inner w-full block">{match[1].trim()}</pre> : s;
+    }));
+
+    // 2. Bold **text**
+    parts = parts.flatMap(p => typeof p !== 'string' ? [p] : p.split(/(\*\*.*?\*\*)/g).map(s => {
+      const match = s.match(/^\*\*(.*?)\*\*$/);
+      return match ? <strong key={Math.random()} className="font-extrabold">{match[1]}</strong> : s;
+    }));
+
+    // 3. Italics *text*
+    parts = parts.flatMap(p => typeof p !== 'string' ? [p] : p.split(/(\*.*?\*)/g).map(s => {
+      const match = s.match(/^\*(.*?)\*$/);
+      return match ? <em key={Math.random()} className="italic opacity-90">{match[1]}</em> : s;
+    }));
+
+    // 4. Strikethrough ~~text~~
+    parts = parts.flatMap(p => typeof p !== 'string' ? [p] : p.split(/(~~.*?~~)/g).map(s => {
+      const match = s.match(/^~~(.*?)~~$/);
+      return match ? <del key={Math.random()} className="line-through opacity-60">{match[1]}</del> : s;
+    }));
+
+    // 5. Code `text`
+    parts = parts.flatMap(p => typeof p !== 'string' ? [p] : p.split(/(`.*?`)/g).map(s => {
+      const match = s.match(/^`(.*?)`$/);
+      return match ? <code key={Math.random()} className="bg-black/10 dark:bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-[0.9em] border border-black/5 dark:border-white/5">{match[1]}</code> : s;
+    }));
+
+    return parts;
+  };
+
+  const rendered = parseMarkdown(text);
+
+  if (!query.trim()) return <>{rendered}</>;
+
+  // Apply search highlighting to remaining string parts
   return (
     <>
-      {parts.map((part, i) => 
-        part.toLowerCase() === query.toLowerCase() 
-          ? <mark key={i} className={`${isCurrentMatch ? 'bg-orange-500 text-white' : 'bg-yellow-400/60 text-slate-900'} rounded-sm px-0.5 transition-colors duration-300`}>{part}</mark> 
-          : part
-      )}
+      {rendered.map((part, idx) => {
+        if (typeof part !== 'string') return part;
+        const subParts = part.split(new RegExp(`(${query})`, 'gi'));
+        return subParts.map((sp, i) => 
+          sp.toLowerCase() === query.toLowerCase() 
+            ? <mark key={`${idx}-${i}`} className={`${isCurrentMatch ? 'bg-orange-500 text-white' : 'bg-yellow-400/60 text-slate-900'} rounded-sm px-0.5 transition-colors duration-300`}>{sp}</mark> 
+            : sp
+        );
+      })}
     </>
   );
 };
@@ -501,6 +548,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
   const recordingTimerRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<any>(null);
   const [buzzCooldown, setBuzzCooldown] = useState(0);
   const [isBuzzing, setIsBuzzing] = useState(false);
@@ -586,6 +634,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
 
   const handleBuzz = () => { if (buzzCooldown > 0) return; if ('vibrate' in navigator) navigator.vibrate(100); setIsBuzzing(true); setTimeout(() => setIsBuzzing(false), 1500); socketService.broadcastBuzz(session.id, currentUser.id); setBuzzCooldown(30); onSendMessage(session.id, 'BUZZ!', 'system'); };
   const toggleDisappearingMode = () => { const nextState = !session.disappearingMode; dispatch({ type: 'TOGGLE_DISAPPEARING_MODE', payload: { sessionId: session.id, enabled: nextState } }); onSendMessage(session.id, `Disappearing messages ${nextState ? 'ON (10s)' : 'OFF'}`, 'system'); setShowMenu(false); };
+  
+  const applyFormatting = (tag: string) => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const selected = inputText.substring(start, end);
+    const before = inputText.substring(0, start);
+    const after = inputText.substring(end);
+    
+    let newText = '';
+    if (tag === '```') {
+      newText = `${before}\n${tag}\n${selected || 'code here'}\n${tag}\n${after}`;
+    } else {
+      newText = `${before}${tag}${selected}${tag}${after}`;
+    }
+    
+    setInputText(newText);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      const cursorOffset = tag.length;
+      textareaRef.current?.setSelectionRange(start + cursorOffset, start + cursorOffset + selected.length);
+    }, 0);
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => { const text = e.target.value; setInputText(text); if (text.trim().length > 0) { socketService.broadcastTyping(session.id, currentUser.id, true); if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = setTimeout(() => socketService.broadcastTyping(session.id, currentUser.id, false), 2000); } else socketService.broadcastTyping(session.id, currentUser.id, false); };
   
   const handleSend = async (overrideText?: string) => {
@@ -806,13 +878,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
                     <div className="relative">
                       {msg.type === 'text' && (
                         <p className="whitespace-pre-wrap leading-relaxed font-medium text-[15px]">
-                          <HighlightedText text={msg.text} query={searchQuery} isCurrentMatch={isCurrentMatch} />
+                          <RichText text={msg.text} query={searchQuery} isCurrentMatch={isCurrentMatch} />
                         </p>
                       )}
                       {msg.type === 'image' && (
                         <div className="space-y-2">
                           <img src={msg.metadata?.url} className="rounded-2xl w-full max-h-60 object-cover shadow-sm cursor-pointer hover:opacity-90 transition-opacity" alt="Image" onClick={() => window.open(msg.metadata?.url)} />
-                          {msg.text && <p className="text-sm font-medium"><HighlightedText text={msg.text} query={searchQuery} isCurrentMatch={isCurrentMatch} /></p>}
+                          {msg.text && <p className="text-sm font-medium"><RichText text={msg.text} query={searchQuery} isCurrentMatch={isCurrentMatch} /></p>}
                         </div>
                       )}
                       {msg.type === 'audio' && <CustomAudioPlayer url={msg.metadata?.url} duration={msg.metadata?.duration} isMine={isMine} />}
@@ -890,6 +962,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
             ))}
           </div>
         )}
+        
         {replyingTo && !isRecording && (
           <div className="flex items-center justify-between bg-[#ff1744]/5 dark:bg-slate-800 p-3 rounded-[1.5rem] border border-[#ff1744]/10 animate-in slide-in-from-bottom-2 duration-300">
             <div className="overflow-hidden flex items-center gap-3">
@@ -902,6 +975,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
             <button onClick={() => setReplyingTo(null)} className="p-2 bg-white dark:bg-slate-700 rounded-full shadow-sm hover:scale-110 active:scale-90 transition-all"><X className="w-4 h-4 text-slate-400" /></button>
           </div>
         )}
+
+        {/* Formatting Toolbar */}
+        {!isRecording && !isSearching && (
+          <div className="flex gap-1 px-1 animate-in fade-in duration-500 slide-in-from-bottom-1">
+             {[
+               { id: 'bold', tag: '**', icon: Bold, label: 'Bold' },
+               { id: 'italic', tag: '*', icon: Italic, label: 'Italic' },
+               { id: 'strike', tag: '~~', icon: Strikethrough, label: 'Strike' },
+               { id: 'code', tag: '`', icon: Code, label: 'Code' },
+               { id: 'block', tag: '```', icon: Type, label: 'Block' }
+             ].map(btn => (
+               <button 
+                 key={btn.id}
+                 onClick={() => applyFormatting(btn.tag)}
+                 title={btn.label}
+                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-[#ff1744] transition-all active:scale-90"
+               >
+                 <btn.icon className="w-4 h-4" />
+               </button>
+             ))}
+          </div>
+        )}
+
         <div className={`flex items-end gap-2 bg-gray-50 dark:bg-slate-950 p-2 rounded-[2rem] border transition-all duration-300 ${isSearching ? 'opacity-50 pointer-events-none' : 'border-gray-100 dark:border-slate-800 focus-within:ring-4 focus-within:ring-[#ff1744]/10 focus-within:border-[#ff1744]/30'}`}>
            {isRecording ? (
              <div className="flex-1 flex items-center justify-between px-4 py-2 animate-in slide-in-from-bottom-4 duration-300">
@@ -926,6 +1022,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
                  <Plus className="w-6 h-6" />
                </button>
                <textarea 
+                 ref={textareaRef}
                  value={inputText} 
                  onChange={handleInputChange} 
                  placeholder={isSearching ? "Jump to matches..." : "Type a message..."} 

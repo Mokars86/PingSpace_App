@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Zap, CheckCircle, AlertCircle, AlertTriangle, Loader2, ArrowLeft, Key, RefreshCw, Sparkles, Hash, Check, Phone, Activity, Globe, Database, ShieldAlert, X, XCircle } from 'lucide-react';
 import { useGlobalDispatch } from '../store';
@@ -304,6 +305,7 @@ export const SignupScreen: React.FC<AuthProps> = ({ onNavigate }) => {
   const dispatch = useGlobalDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [formData, setFormData] = useState({ name: '', username: '', email: '', phone: '', password: '' });
   const [errors, setErrors] = useState({ name: '', username: '', email: '', phone: '', password: '' });
@@ -374,14 +376,48 @@ export const SignupScreen: React.FC<AuthProps> = ({ onNavigate }) => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await api.auth.signup(formData);
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Welcome to PingSpace! Account created successfully.' } });
-      // Since confirmation is disabled, auth listener in App.tsx will handle redirection to main screen if session is returned.
-      // If no session is returned immediately, they will stay here briefly then be pulled in.
+      const result = await api.auth.signup(formData);
+      
+      if (result.needsVerification) {
+        setVerificationSent(true);
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Verification email sent. Please check your inbox.' } });
+      } else {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Welcome to PingSpace!' } });
+        dispatch({ type: 'LOGIN_SUCCESS', payload: result });
+      }
     } catch (error: any) {
+      console.error("Signup Screen Error:", error);
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: error.message || 'Signup failed.' } });
     } finally { setLoading(false); }
   };
+
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-950 p-6 flex flex-col justify-center items-center text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 rounded-[2.5rem] flex items-center justify-center mb-8 text-[#ff1744] shadow-xl shadow-red-500/10 border-2 border-[#ff1744]/20 animate-bounce">
+           <Mail className="w-10 h-10" />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-4 uppercase tracking-tighter">Check Your Inbox</h1>
+        <p className="text-slate-500 dark:text-slate-400 max-w-xs mb-10 leading-relaxed font-medium">
+          We've sent a verification link to <span className="text-[#ff1744] font-black">{formData.email}</span>. Please click the link to activate your account.
+        </p>
+        <div className="space-y-4 w-full max-w-xs">
+           <button 
+             onClick={onNavigate} 
+             className="w-full py-4 bg-[#ff1744] text-white font-black rounded-2xl shadow-xl shadow-red-500/30 uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+           >
+             Go to Login <ArrowRight className="w-4 h-4" />
+           </button>
+           <button 
+             onClick={() => api.auth.resendConfirmationEmail(formData.email)} 
+             className="w-full py-4 text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-[#ff1744] transition-colors"
+           >
+             Didn't get the email? Resend
+           </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 p-6 flex flex-col justify-center relative transition-colors overflow-y-auto no-scrollbar">

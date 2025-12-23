@@ -4,21 +4,28 @@ import { User } from "../types";
 
 /**
  * Auth Service
- * Handles Supabase Authentication
+ * Handles Supabase Authentication and Profile Mapping
  */
 
-const mapUser = (sbUser: any, profile?: any): User => {
-  return {
-    id: sbUser.id,
-    name: profile?.name || sbUser.user_metadata?.name || 'User',
-    avatar: profile?.avatar || sbUser.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email || 'User')}`,
-    isOnline: true,
-    status: profile?.status || 'Available',
-    bio: profile?.bio || ''
-  };
-};
-
 export const authService = {
+  /**
+   * Maps a Supabase Auth User + Optional Profile Record to our app's User type.
+   * Prioritizes Profile table data, falls back to Auth metadata.
+   */
+  mapUser: (sbUser: any, profile?: any): User => {
+    // metadata is stored in user_metadata during signUp
+    const meta = sbUser.user_metadata || {};
+    
+    return {
+      id: sbUser.id,
+      name: profile?.name || meta.name || 'PingSpace User',
+      avatar: profile?.avatar || meta.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email || 'PS')}&background=ff1744&color=fff`,
+      isOnline: true,
+      status: profile?.status || 'Available',
+      bio: profile?.bio || meta.bio || ''
+    };
+  },
+
   getToken: async () => {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
@@ -28,14 +35,19 @@ export const authService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
     
-    // Fetch profile extension from 'profiles' table safely
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
+    try {
+      // Fetch profile extension from 'profiles' table safely
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    return mapUser(user, profile);
+      return authService.mapUser(user, profile);
+    } catch (e) {
+      console.warn("Failed to fetch profile table, using metadata fallback", e);
+      return authService.mapUser(user);
+    }
   },
 
   isAuthenticated: async () => {
@@ -47,19 +59,17 @@ export const authService = {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         try {
-          // If we just signed up, wait a tiny bit for the trigger to finish
-          if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-            callback(mapUser(session.user, profile));
-          } else {
-            callback(mapUser(session.user));
-          }
+          // On login or change, try to get the full profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          
+          callback(authService.mapUser(session.user, profile));
         } catch (e) {
-          callback(mapUser(session.user));
+          // Fallback to auth data if database query fails (e.g. table not ready)
+          callback(authService.mapUser(session.user));
         }
       } else {
         callback(null);
