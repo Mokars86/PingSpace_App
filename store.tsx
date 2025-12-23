@@ -55,6 +55,7 @@ const initialState: GlobalState = {
   activeCall: null,
   isOnline: navigator.onLine,
   settings: {
+    language: 'UK English',
     notifications: {
       push: true,
       email: true,
@@ -146,6 +147,7 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         metadata: metadata,
         replyTo: replyTo,
         expiresAt: expiresAt,
+        status: 'sent',
         isStarred: false
       };
       
@@ -362,17 +364,30 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
     case 'SET_ONLINE_STATUS':
       return { ...state, isOnline: action.payload };
 
-    case 'UPDATE_SETTING':
+    case 'UPDATE_SETTING': {
+      const { section, key, value } = action.payload;
+      if (section === 'language' as any) {
+        // Special case for top-level setting update if desired, 
+        // but our current state structure has language directly inside settings
+        return {
+          ...state,
+          settings: {
+            ...state.settings,
+            language: value
+          }
+        };
+      }
       return {
         ...state,
         settings: {
           ...state.settings,
-          [action.payload.section]: {
-            ...state.settings[action.payload.section],
-            [action.payload.key]: action.payload.value
+          [section]: {
+            ...((state.settings as any)[section]),
+            [key]: value
           }
         }
       };
+    }
 
     case 'TOGGLE_PIN_CHAT':
       return {

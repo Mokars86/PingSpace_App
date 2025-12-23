@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, Plus, Heart, MessageCircle, Share2, 
   Users, ShoppingCart, ShoppingBag,
@@ -18,10 +18,10 @@ import {
   Fingerprint as SecurityIcon, Shield as ShieldIcon, RefreshCcw, Languages, Accessibility, 
   MessageSquareHeart, Bug, BookOpen, ShieldAlert, Wallet as WalletIcon, ShoppingCart as MarketIcon,
   Package, Info, MapPin as LocationIcon, CheckCircle, Minus, ShoppingCart as CartIcon, MoveRight,
-  Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu
+  Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu, Type as TypeIcon, HardDrive, MonitorSmartphone
 } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
-import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem } from '../types';
+import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem, User } from '../types';
 import { useGlobalState, useGlobalDispatch } from '../store';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
@@ -78,44 +78,89 @@ const SettingSubHeader: React.FC<{ title: string; onBack: () => void }> = ({ tit
 );
 
 // --- Story Components ---
-const StoryViewerModal: React.FC<{ story: Story | null; onClose: () => void }> = ({ story, onClose }) => {
+const StoryViewerModal: React.FC<{ stories: Story[]; onClose: () => void }> = ({ stories, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [reply, setReply] = useState('');
+  const dispatch = useGlobalDispatch();
+  const timerRef = useRef<any>(null);
+
+  const activeStory = stories[currentIndex];
 
   useEffect(() => {
-    if (story) {
+    if (activeStory) {
       setProgress(0);
-      const interval = setInterval(() => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      
+      timerRef.current = setInterval(() => {
         setProgress(p => {
           if (p >= 100) {
-            clearInterval(interval);
-            onClose();
+            handleNext();
             return 100;
           }
-          return p + 1.5;
+          return p + 1.2; 
         });
-      }, 100);
-      return () => clearInterval(interval);
+      }, 50);
     }
-  }, [story, onClose]);
+    return () => clearInterval(timerRef.current);
+  }, [currentIndex, stories.length]);
 
-  if (!story) return null;
+  const handleNext = () => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      onClose();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    } else {
+      setProgress(0);
+    }
+  };
+
+  const handleSendReply = () => {
+    if (!reply.trim()) return;
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Transmission sent to ' + activeStory.userName } });
+    setReply('');
+    onClose();
+  };
+
+  if (!activeStory) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
-       <div className="absolute top-0 left-0 right-0 p-6 z-20 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+    <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col animate-in fade-in duration-500">
+       {/* Tap Zones for Navigation */}
+       <div className="absolute inset-0 z-10 flex">
+          <div className="w-1/3 h-full" onClick={handlePrev}></div>
+          <div className="w-1/3 h-full" onClick={onClose}></div>
+          <div className="w-1/3 h-full" onClick={handleNext}></div>
+       </div>
+
+       <div className="absolute top-0 left-0 right-0 p-6 z-20 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none">
+          {/* Multi-segment Progress Bars */}
           <div className="flex gap-1.5 mb-5">
-             <div className="h-1 bg-white/20 rounded-full flex-1 overflow-hidden">
-                <div className="h-full bg-white transition-all shadow-[0_0_8px_white]" style={{ width: `${progress}%` }}></div>
-             </div>
+             {stories.map((_, idx) => (
+                <div key={idx} className="h-1 bg-white/20 rounded-full flex-1 overflow-hidden">
+                   <div 
+                     className="h-full bg-white transition-all shadow-[0_0_12px_white]" 
+                     style={{ 
+                       width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' 
+                     }}
+                   ></div>
+                </div>
+             ))}
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center pointer-events-auto">
              <div className="flex items-center gap-3">
                 <div className="p-0.5 rounded-full bg-gradient-to-tr from-[#ff1744] to-orange-400">
-                  <img src={story.userAvatar} className="w-11 h-11 rounded-full border-2 border-black object-cover" alt={story.userName} />
+                  <img src={activeStory.userAvatar} className="w-11 h-11 rounded-full border-2 border-black object-cover" alt={activeStory.userName} />
                 </div>
                 <div>
-                   <h4 className="font-bold text-white text-base tracking-tight">{story.userName}</h4>
-                   <p className="text-xs text-white/60 font-medium">{story.timestamp}</p>
+                   <h4 className="font-bold text-white text-base tracking-tight">{activeStory.userName}</h4>
+                   <p className="text-[10px] text-white/60 font-black uppercase tracking-widest">{activeStory.timestamp}</p>
                 </div>
              </div>
              <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-[#ff1744] rounded-full backdrop-blur-md text-white transition-all">
@@ -123,25 +168,64 @@ const StoryViewerModal: React.FC<{ story: Story | null; onClose: () => void }> =
              </button>
           </div>
        </div>
-       <img src={story.image} className="w-full h-full object-contain bg-black" alt="Story" />
-       {story.caption && (
-         <div className="absolute bottom-10 left-0 right-0 p-10 flex justify-center text-center">
-            <div className="max-w-md px-6 py-4 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl">
-               <p className="text-white font-medium text-lg leading-relaxed italic">"{story.caption}"</p>
+
+       <div className="flex-1 flex items-center justify-center p-4">
+          {activeStory.type === 'image' ? (
+             <img src={activeStory.content} className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl" alt="Story" />
+          ) : (
+             <div className={`w-full aspect-[9/16] max-w-sm rounded-[3rem] flex items-center justify-center p-12 text-center shadow-2xl ${activeStory.background || 'bg-gradient-to-br from-[#ff1744] to-purple-600'}`}>
+                <h2 className="text-3xl font-black text-white leading-tight uppercase tracking-tighter">{activeStory.content}</h2>
+             </div>
+          )}
+       </div>
+
+       {activeStory.caption && activeStory.type === 'image' && (
+         <div className="px-8 pb-32 flex justify-center text-center z-20 pointer-events-none">
+            <div className="max-w-md px-6 py-4 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10">
+               <p className="text-white font-medium text-lg italic leading-relaxed">"{activeStory.caption}"</p>
             </div>
          </div>
        )}
+
+       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent pb-10 z-30">
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-2xl p-2 rounded-[2rem] border border-white/10">
+             <input 
+               type="text" 
+               value={reply}
+               onChange={(e) => setReply(e.target.value)}
+               placeholder="Transmit reply..." 
+               className="flex-1 bg-transparent text-white px-4 py-3 outline-none font-bold text-sm"
+             />
+             <button 
+               onClick={handleSendReply}
+               className="p-3 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/30"
+             >
+                <Send className="w-5 h-5" />
+             </button>
+          </div>
+       </div>
     </div>
   );
 };
 
 const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const dispatch = useGlobalDispatch();
+  const [mode, setMode] = useState<'image' | 'text'>('image');
   const [image, setImage] = useState('');
+  const [textContent, setTextContent] = useState('');
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeBg, setActiveBg] = useState('bg-gradient-to-br from-[#ff1744] to-purple-600');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const gradients = [
+    'bg-gradient-to-br from-[#ff1744] to-purple-600',
+    'bg-gradient-to-br from-indigo-500 to-emerald-500',
+    'bg-gradient-to-br from-orange-400 to-rose-400',
+    'bg-slate-900',
+    'bg-gradient-to-br from-blue-600 to-indigo-700'
+  ];
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -158,35 +242,105 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   };
 
   const handlePost = async () => {
-    if (!image) return;
+    if (mode === 'image' && !image) return;
+    if (mode === 'text' && !textContent) return;
+    
     setLoading(true);
     try {
-      const newStory = await api.stories.addStory(image, caption);
+      const content = mode === 'image' ? image : textContent;
+      const newStory: Story = {
+        id: Date.now().toString(),
+        userId: 'me',
+        userName: 'Me',
+        userAvatar: 'https://ui-avatars.com/api/?name=Me&background=ff1744&color=fff',
+        type: mode,
+        content: content,
+        timestamp: 'Just now',
+        viewed: false,
+        caption: mode === 'image' ? caption : undefined,
+        background: mode === 'text' ? activeBg : undefined
+      };
       dispatch({ type: 'ADD_STORY', payload: newStory });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Status shared!' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Neural Sync Complete' } });
       onClose();
-      setImage(''); setCaption('');
+      resetForm();
     } catch (e: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to post.' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Sync failed.' } });
     } finally {
       setLoading(false);
     }
   };
 
+  const resetForm = () => {
+    setImage(''); setTextContent(''); setCaption(''); setMode('image');
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4">
-       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-sm p-6 relative shadow-2xl border border-white/20 dark:border-slate-800">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10"><X className="w-5 h-5 text-slate-500" /></button>
-          <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">Post Status</h3>
-          <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-[4/5] bg-gray-50 dark:bg-slate-950 rounded-3xl mb-6 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800">
-             {image ? <img src={image} className="w-full h-full object-cover" alt="Preview" /> : <Camera className="w-10 h-10 text-slate-300" />}
-             <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-2xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
+       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm p-8 relative shadow-2xl border border-white/10 animate-in zoom-in-95 my-auto">
+          <button onClick={onClose} className="absolute top-8 right-8 p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:rotate-90 transition-transform"><X className="w-5 h-5 text-slate-500" /></button>
+          
+          <div className="flex items-center gap-4 mb-8">
+             <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center justify-center text-[#ff1744]">
+                <Flame className="w-6 h-6" />
+             </div>
+             <div>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Neural Sync</h3>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Share Transmission</p>
+             </div>
           </div>
-          <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-6" />
-          <button onClick={handlePost} disabled={!image || loading || uploading} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/30">
-             {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Share Moment'}
+
+          <div className="flex gap-2 mb-8 bg-gray-50 dark:bg-slate-950 p-1.5 rounded-2xl border border-gray-100 dark:border-slate-800">
+             <button onClick={() => setMode('image')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'image' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Visual</button>
+             <button onClick={() => setMode('text')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'text' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Thought</button>
+          </div>
+
+          {mode === 'image' ? (
+             <div className="space-y-6">
+                <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-square bg-gray-50 dark:bg-slate-950 rounded-[2.5rem] overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 group cursor-pointer hover:border-[#ff1744]/50 transition-colors">
+                   {image ? <img src={image} className="w-full h-full object-cover" alt="Preview" /> : (
+                      <>
+                        <Camera className="w-10 h-10 text-slate-300 group-hover:text-[#ff1744] transition-colors mb-2" />
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Capture Visual</span>
+                      </>
+                   )}
+                   <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                   {uploading && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
+                </div>
+                <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Neural caption..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all" />
+             </div>
+          ) : (
+             <div className="space-y-6">
+                <div className={`aspect-square rounded-[2.5rem] flex flex-col items-center justify-center p-8 transition-all duration-500 shadow-xl ${activeBg}`}>
+                   <textarea 
+                     value={textContent}
+                     onChange={(e) => setTextContent(e.target.value)}
+                     placeholder="Enter neural thought..."
+                     className="w-full bg-transparent text-white text-center text-2xl font-black placeholder-white/40 border-none outline-none resize-none uppercase tracking-tighter"
+                     rows={4}
+                   />
+                </div>
+                <div className="flex justify-center gap-3">
+                   {gradients.map(g => (
+                      <button 
+                        key={g} 
+                        onClick={() => setActiveBg(g)} 
+                        className={`w-8 h-8 rounded-full border-4 transition-all ${activeBg === g ? 'border-white scale-125' : 'border-transparent scale-90'} ${g}`} 
+                      />
+                   ))}
+                </div>
+             </div>
+          )}
+
+          <button onClick={handlePost} disabled={loading || uploading || (mode === 'image' ? !image : !textContent)} className="w-full mt-10 py-5 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
+             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+               <>
+                 <span>Broadcast Sync</span>
+                 <Sparkles className="w-4 h-4" />
+               </>
+             )}
           </button>
        </div>
     </div>
@@ -196,55 +350,126 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 export const StatusScreen: React.FC = () => {
   const { stories, currentUser } = useGlobalState();
   const [showAddStory, setShowAddStory] = useState(false);
-  const [viewStory, setViewStory] = useState<Story | null>(null);
+  const [viewStories, setViewStories] = useState<Story[] | null>(null);
+
+  // Group stories by userId for combined viewing
+  const groupedStories = useMemo(() => {
+    return stories.reduce((acc, story) => {
+      if (!acc[story.userId]) acc[story.userId] = [];
+      acc[story.userId].push(story);
+      return acc;
+    }, {} as Record<string, Story[]>);
+  }, [stories]);
+
+  const userIds = useMemo(() => Object.keys(groupedStories), [groupedStories]);
 
   return (
     <div className="min-h-full bg-white dark:bg-slate-950 transition-colors pb-32">
       <AddStoryModal isOpen={showAddStory} onClose={() => setShowAddStory(false)} />
-      <StoryViewerModal story={viewStory} onClose={() => setViewStory(null)} />
-      <div className="px-6 pt-8 pb-4">
+      {viewStories && <StoryViewerModal stories={viewStories} onClose={() => setViewStories(null)} />}
+      
+      <div className="px-6 pt-6 pb-4">
         <div className="flex gap-5 overflow-x-auto pb-6 no-scrollbar -mx-2 px-2">
+          {/* My Status Trigger */}
           <div className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group" onClick={() => setShowAddStory(true)}>
              <div className="relative">
-                <div className="w-[4.5rem] h-[4.5rem] rounded-[1.75rem] border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center bg-slate-50 dark:bg-slate-900 overflow-hidden">
-                  <img src={currentUser?.avatar} className="w-full h-full object-cover opacity-60 grayscale" alt="Me" />
+                <div className="w-[4.5rem] h-[4.5rem] rounded-[2rem] p-0.5 border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center overflow-hidden">
+                   <img src={currentUser?.avatar} className="w-full h-full object-cover opacity-60 grayscale group-hover:scale-110 transition-transform" alt="Me" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#ff1744] rounded-xl border-4 border-white dark:border-slate-950 flex items-center justify-center shadow-lg"><Plus className="w-4 h-4 text-white" strokeWidth={4} /></div>
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#ff1744] rounded-xl border-4 border-white dark:border-slate-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-all">
+                  <Plus className="w-4 h-4 text-white" strokeWidth={4} />
+                </div>
              </div>
-             <span className="text-[10px] font-black text-slate-400 uppercase">Me</span>
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Sync</span>
           </div>
-          {stories.map(story => (
-            <div key={story.id} className="flex flex-col items-center gap-3 shrink-0 cursor-pointer" onClick={() => setViewStory(story)}>
-              <div className={`w-[4.5rem] h-[4.5rem] rounded-[1.75rem] p-0.5 ${story.viewed ? 'bg-slate-200' : 'bg-gradient-to-tr from-[#ff1744] to-orange-400 p-[3px]'}`}>
-                <div className="w-full h-full rounded-[1.6rem] overflow-hidden border-2 border-white dark:border-slate-950 bg-slate-100 dark:bg-slate-800">
-                  <img src={story.userAvatar} className="w-full h-full object-cover" alt={story.userName} />
+
+          {/* Grouped Horizontal Stories */}
+          {userIds.map((uid) => {
+            const userStories = groupedStories[uid];
+            const firstStory = userStories[0];
+            const allViewed = userStories.every(s => s.viewed);
+            
+            return (
+              <div key={uid} className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group" onClick={() => setViewStories(userStories)}>
+                <div className={`w-[4.5rem] h-[4.5rem] rounded-[2rem] p-1 ${allViewed ? 'bg-slate-200 dark:bg-slate-800' : 'bg-gradient-to-tr from-[#ff1744] to-red-400'}`}>
+                  <div className="w-full h-full rounded-[1.8rem] overflow-hidden border-2 border-white dark:border-slate-950 bg-slate-100 dark:bg-slate-800">
+                    {firstStory.type === 'image' ? (
+                       <img src={firstStory.content} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={firstStory.userName} />
+                    ) : (
+                       <div className={`w-full h-full flex items-center justify-center p-2 text-center text-[6px] font-black text-white ${firstStory.background}`}>
+                          {firstStory.content.substring(0, 15)}...
+                       </div>
+                    )}
+                  </div>
                 </div>
+                <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase truncate w-16 text-center">
+                  {uid === 'me' ? 'Me' : firstStory.userName.split(' ')[0]}
+                </span>
               </div>
-              <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase truncate w-[4.5rem] text-center">{story.userName.split(' ')[0]}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
-      <div className="px-6 space-y-4">
-         <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">Recent Updates</h3>
-         {stories.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center">
-               <CircleDashed className="w-12 h-12 mb-2 text-gray-300" />
-               <p className="text-xs font-bold uppercase">No updates from friends</p>
+
+      <div className="px-6 space-y-8 mt-4">
+         <div>
+            <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+               <Radio className="w-3 h-3 text-[#ff1744]" /> Primary Sync
+            </h3>
+            {userIds.filter(uid => uid !== 'me').length === 0 ? (
+               <div className="bg-gray-50 dark:bg-slate-900 rounded-[2.5rem] p-12 text-center opacity-40 border border-dashed border-gray-200 dark:border-slate-800">
+                  <CircleDashed className="w-10 h-10 mx-auto mb-4 animate-spin duration-[5s]" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Awaiting Neural Inputs</p>
+               </div>
+            ) : (
+               <div className="grid gap-4">
+                 {userIds.filter(uid => uid !== 'me').map(uid => {
+                   const userStories = groupedStories[uid];
+                   const firstStory = userStories[0];
+                   const allViewed = userStories.every(s => s.viewed);
+                   
+                   return (
+                     <div key={uid + '_list'} onClick={() => setViewStories(userStories)} className="flex items-center gap-5 p-5 rounded-[2.25rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all group">
+                         <div className="relative">
+                            <img src={firstStory.userAvatar} className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:scale-110 transition-transform" alt={firstStory.userName} />
+                            {!allViewed && <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ff1744] rounded-full border-2 border-white dark:border-slate-900 shadow-sm animate-pulse"></div>}
+                         </div>
+                         <div className="flex-1">
+                           <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-lg">{firstStory.userName}</h4>
+                           <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{userStories.length} Updates • {firstStory.timestamp}</span>
+                           </div>
+                         </div>
+                         <div className="w-10 h-10 bg-gray-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-300 group-hover:text-[#ff1744] transition-colors">
+                            <ChevronRight className="w-5 h-5" />
+                         </div>
+                     </div>
+                   );
+                 })}
+               </div>
+            )}
+         </div>
+
+         <div>
+            <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+               <Globe className="w-3 h-3" /> Public Broadcasts
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+               {[1, 2].map(i => (
+                  <div key={i} className="aspect-[3/4] bg-slate-100 dark:bg-slate-900 rounded-[2.5rem] relative overflow-hidden group shadow-sm border border-gray-100 dark:border-slate-800">
+                     <img src={`https://picsum.photos/400/600?random=stream${i}`} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" alt="Discover" />
+                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                     <div className="absolute bottom-5 left-5 right-5">
+                        <div className="flex items-center gap-2 mb-2">
+                           <div className="w-6 h-6 rounded-lg bg-[#ff1744] flex items-center justify-center shadow-lg"><Zap className="w-3 h-3 text-white fill-white" /></div>
+                           <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Flash Stream</span>
+                        </div>
+                        <p className="text-white font-black uppercase tracking-tighter text-sm line-clamp-2">Exploring Neo-Tokyo's Virtual Districts</p>
+                     </div>
+                  </div>
+               ))}
             </div>
-         ) : (
-            <div className="grid gap-4">
-              {stories.map(story => (
-                <div key={story.id + '_list'} onClick={() => setViewStory(story)} className="flex items-center gap-4 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer hover:shadow-md transition-all">
-                    <img src={story.userAvatar} className="w-14 h-14 rounded-2xl object-cover" alt={story.userName} />
-                    <div className="flex-1">
-                      <h4 className="font-black text-slate-900 dark:text-white">{story.userName}</h4>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{story.timestamp}</p>
-                    </div>
-                </div>
-              ))}
-            </div>
-         )}
+         </div>
       </div>
     </div>
   );
@@ -324,8 +549,8 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4 overflow-y-auto no-scrollbar">
-       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-w-sm p-8 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto animate-in zoom-in-95">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 dark:bg-slate-800 rounded-full z-10 hover:rotate-90 transition-transform"><X className="w-5 h-5 text-slate-500" /></button>
+       <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm p-8 relative shadow-2xl border border-white/20 dark:border-slate-800 my-auto animate-in zoom-in-95">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 dark:bg-slate-800 rounded-full z-10 hover:rotate-90 transition-transform"><X className="w-5 h-5 text-slate-500" /></button>
           
           <div className="flex items-center gap-4 mb-8">
              <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center text-indigo-500">
@@ -410,7 +635,6 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
     <div className="flex flex-col h-full bg-white dark:bg-slate-950 transition-colors pb-32 overflow-hidden">
       <AddSpaceModal isOpen={showAddSpace} onClose={() => setShowAddSpace(false)} />
       
-      {/* Dynamic Header */}
       <div className="px-6 pt-6 pb-2 space-y-6 shrink-0">
         <div className="flex items-center justify-between">
            <div>
@@ -422,7 +646,6 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
            </button>
         </div>
 
-        {/* Search Pulse */}
         <div className="relative group">
            <Search className="absolute left-4 top-4 w-5 h-5 text-slate-400 group-focus-within:text-[#ff1744] transition-colors" />
            <input 
@@ -434,7 +657,6 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
            />
         </div>
 
-        {/* Neural Categories */}
         <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
            {categories.map(cat => (
              <button 
@@ -454,7 +676,6 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pt-4 no-scrollbar space-y-8 pb-20">
-        {/* Trending Hero Section */}
         {heroSpace && !searchQuery && (
           <div className="relative group">
              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
@@ -491,7 +712,6 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
           </div>
         )}
 
-        {/* Network Grid */}
         <div className="space-y-4">
            <div className="flex items-center justify-between px-1">
               <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Network Nodes</h3>
@@ -523,14 +743,12 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
                           <p className="text-[10px] font-black uppercase text-slate-400 mb-4">{space.members.toLocaleString()} members</p>
                           
                           <div className="flex items-center justify-between">
-                             {/* Avatar Stack Mockup */}
                              <div className="flex -space-x-2">
                                 {[1,2,3].map(i => (
                                    <img key={i} src={`https://picsum.photos/50/50?random=${space.id}${i}`} className="w-6 h-6 rounded-lg border-2 border-white dark:border-slate-900 object-cover" alt="Member" />
                                 ))}
                                 <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-black text-slate-400">+5</div>
                              </div>
-                             
                              <button 
                                 onClick={() => dispatch({ type: 'JOIN_SPACE', payload: space.id })} 
                                 className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
@@ -734,7 +952,6 @@ export const MarketplaceScreen: React.FC = () => {
          }}
       />
 
-      {/* Header Area */}
       <div className="px-6 pt-6 pb-2 space-y-6">
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
@@ -764,7 +981,6 @@ export const MarketplaceScreen: React.FC = () => {
            </div>
         </div>
 
-        {/* Search */}
         <div className="relative group">
            <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-[#ff1744] transition-colors" />
            <input 
@@ -776,7 +992,6 @@ export const MarketplaceScreen: React.FC = () => {
            />
         </div>
 
-        {/* Categories */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-6 px-6">
            {categories.map(cat => (
              <button 
@@ -794,7 +1009,6 @@ export const MarketplaceScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid */}
       <div className="flex-1 overflow-y-auto px-6 pt-4 no-scrollbar">
         {filteredProducts.length === 0 ? (
            <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 animate-in fade-in">
@@ -852,8 +1066,7 @@ export const MarketplaceScreen: React.FC = () => {
   );
 };
 
-// --- ProfileScreen Navigation Logic ---
-type ProfileView = 'main' | 'privacy' | 'notifications' | 'accessibility' | 'language' | 'help' | 'wallet';
+type ProfileView = 'main' | 'privacy' | 'notifications' | 'accessibility' | 'language' | 'help' | 'wallet' | 'devices';
 
 export const ProfileScreen: React.FC = () => {
   const { currentUser, theme, settings, transactions } = useGlobalState();
@@ -866,6 +1079,7 @@ export const ProfileScreen: React.FC = () => {
   const [editBio, setEditBio] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [tempLang, setTempLang] = useState(settings.language);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -875,6 +1089,12 @@ export const ProfileScreen: React.FC = () => {
       setEditBio(currentUser.bio || '');
     }
   }, [currentUser, isEditing]);
+
+  useEffect(() => {
+    if (activeView === 'language') {
+      setTempLang(settings.language);
+    }
+  }, [activeView, settings.language]);
 
   const handleAvatarClick = () => avatarInputRef.current?.click();
 
@@ -910,13 +1130,16 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleSaveLanguage = () => {
+    dispatch({ type: 'UPDATE_SETTING', payload: { section: 'language' as any, key: '', value: tempLang } });
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Semantic protocol updated: ' + tempLang } });
+    setActiveView('main');
+  };
+
   const handleLogout = async () => {
-    // Perform an optimistic immediate local logout to ensure UI responsiveness
     dispatch({ type: 'LOGOUT' });
     dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Disconnecting session...' } });
-    
     try {
-      // Fire and forget server-side sign out
       api.auth.logout().catch(err => console.error("Server signout ignored as local state cleared", err));
     } catch (err: any) {
       console.warn("Sign out request error", err);
@@ -929,11 +1152,68 @@ export const ProfileScreen: React.FC = () => {
 
   // --- SUB-VIEWS ---
 
+  const renderDevices = () => (
+    <div className="animate-in slide-in-from-right duration-300">
+      <SettingSubHeader title="Linked Grid" onBack={() => setActiveView('main')} />
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+           <div className="p-6 border-b border-gray-50 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex items-center justify-center text-emerald-500">
+                    <Smartphone className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">This Device</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">iPhone 15 Pro • Active</p>
+                 </div>
+              </div>
+              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
+           </div>
+           
+           <div className="p-6 border-b border-gray-50 dark:border-slate-800 flex items-center justify-between group">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
+                    <Monitor className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Citadel Desktop</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">MacOS • Last synced 2h ago</p>
+                 </div>
+              </div>
+              <button className="p-2 text-slate-300 hover:text-red-500 transition-colors"><XCircle className="w-5 h-5" /></button>
+           </div>
+
+           <div className="p-6 flex items-center justify-between group">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
+                    <Laptop className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Work Terminal</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Linux • Last synced 1d ago</p>
+                 </div>
+              </div>
+              <button className="p-2 text-slate-300 hover:text-red-500 transition-colors"><XCircle className="w-5 h-5" /></button>
+           </div>
+        </div>
+
+        <button className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+           <QrCode className="w-5 h-5" />
+           Link Neural Node
+        </button>
+
+        <div className="p-6 bg-amber-50 dark:bg-amber-900/10 rounded-[2rem] border border-amber-100 dark:border-amber-900/20 flex gap-4">
+           <ShieldAlert className="w-6 h-6 text-amber-500 shrink-0" />
+           <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase leading-relaxed tracking-tight">Managing linked devices ensures your identity remains secure. Log out of unknown nodes immediately.</p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderWallet = () => (
     <div className="animate-in slide-in-from-right duration-300">
       <SettingSubHeader title="Wealth Terminal" onBack={() => setActiveView('main')} />
       
-      {/* Wallet Balance Card */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl mb-8 border border-white/5">
         <Sparkles className="absolute right-[-5%] top-[-5%] w-32 h-32 opacity-10 rotate-12 text-amber-400" />
         <div className="relative z-10">
@@ -1018,6 +1298,7 @@ export const ProfileScreen: React.FC = () => {
           value={settings.privacy.readReceipts} 
           onClick={() => updateSetting('privacy', 'readReceipts', !settings.privacy.readReceipts)}
         />
+        <SettingRow icon={SecurityIcon} title="Biometric Unlock" subtitle="Secure access with facial/touch ID" isToggle value={true} onClick={() => {}} />
         <SettingRow icon={ShieldCheck} title="Blocked Grid" subtitle="Managed filtered entities" onClick={() => {}} />
       </div>
     </div>
@@ -1051,6 +1332,14 @@ export const ProfileScreen: React.FC = () => {
           value={settings.notifications.transactions} 
           onClick={() => updateSetting('notifications', 'transactions', !settings.notifications.transactions)}
         />
+        <SettingRow 
+          icon={CircleDashed} 
+          title="Status Updates" 
+          subtitle="Notify for neural thought streams" 
+          isToggle 
+          value={true} 
+          onClick={() => {}} 
+        />
       </div>
     </div>
   );
@@ -1081,20 +1370,37 @@ export const ProfileScreen: React.FC = () => {
   );
 
   const renderLanguage = () => (
-    <div className="animate-in slide-in-from-right duration-300">
+    <div className="animate-in slide-in-from-right duration-300 flex flex-col h-full">
       <SettingSubHeader title="Linguistic Grid" onBack={() => setActiveView('main')} />
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        {['Neo-English', 'Global Spanish', 'Citadel French', 'Sector German', 'Void Japanese', 'Pulse Mandarin'].map((lang, idx) => (
-          <button key={lang} className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-b border-gray-50 dark:border-slate-800 last:border-0">
-             <div className="flex items-center gap-4">
-                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${idx === 0 ? 'border-[#ff1744] bg-[#ff1744]/10' : 'border-slate-200 dark:border-slate-700'}`}>
-                   {idx === 0 && <div className="w-3 h-3 rounded-full bg-[#ff1744]"></div>}
-                </div>
-                <span className={`text-xs font-black uppercase tracking-widest ${idx === 0 ? 'text-[#ff1744]' : 'text-slate-500'}`}>{lang}</span>
-             </div>
-             {idx === 0 && <span className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">Active</span>}
-          </button>
-        ))}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+          {['UK English', 'Spanish', 'Arabic', 'US English', 'French', 'German'].map((lang) => (
+            <button 
+              key={lang} 
+              onClick={() => setTempLang(lang)}
+              className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-b border-gray-50 dark:border-slate-800 last:border-0"
+            >
+               <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${tempLang === lang ? 'border-[#ff1744] bg-[#ff1744]/10 scale-110' : 'border-slate-200 dark:border-slate-700'}`}>
+                     {tempLang === lang && <div className="w-3 h-3 rounded-full bg-[#ff1744] animate-in zoom-in duration-300"></div>}
+                  </div>
+                  <span className={`text-xs font-black uppercase tracking-widest ${tempLang === lang ? 'text-[#ff1744]' : 'text-slate-500'}`}>{lang}</span>
+               </div>
+               {tempLang === lang && <span className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">Selected</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      <div className="fixed bottom-32 left-4 right-4 z-20">
+         <button 
+            onClick={handleSaveLanguage}
+            disabled={tempLang === settings.language}
+            className={`w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-2xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:grayscale disabled:scale-100`}
+         >
+            <Save className="w-5 h-5" />
+            Save Configuration
+         </button>
       </div>
     </div>
   );
@@ -1118,7 +1424,6 @@ export const ProfileScreen: React.FC = () => {
     <div className="animate-in fade-in duration-500 pb-12">
       <input type="file" ref={avatarInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
       
-      {/* Profile Identity Card */}
       <div className="flex flex-col items-center py-10 relative">
         <button 
           onClick={() => setActiveView('wallet')}
@@ -1138,7 +1443,7 @@ export const ProfileScreen: React.FC = () => {
         {isEditing ? (
           <div className="w-full max-sm space-y-6">
             <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Display Name" className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 font-bold text-slate-900 dark:text-white" />
-            <input type="text" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} placeholder="Status Phrase" className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 text-slate-700 dark:text-slate-300" />
+            <input type="text" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} placeholder="Status Phrase" className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 text-slate-700 dark:text-slate-300" />
             <button onClick={handleSaveProfile} disabled={saving} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-red-500/30">{saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Apply Identity'}</button>
           </div>
         ) : (
@@ -1150,12 +1455,12 @@ export const ProfileScreen: React.FC = () => {
       </div>
 
       <div className="space-y-8">
-        {/* Settings Hub Cards */}
         <div className="space-y-4">
            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] ml-2">Control Terminal</h3>
            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
               <SettingRow icon={Lock} title="Privacy Grid" subtitle="Identity & visibility masks" onClick={() => setActiveView('privacy')} />
               <SettingRow icon={Bell} title="Transmissions" subtitle="Notification sensory alerts" onClick={() => setActiveView('notifications')} />
+              <SettingRow icon={MonitorSmartphone} title="Linked Nodes" subtitle="Manage active hardware sessions" onClick={() => setActiveView('devices')} />
               <SettingRow icon={Accessibility} title="Neural Interface" subtitle="Accessibility & UX modifiers" onClick={() => setActiveView('accessibility')} />
               <SettingRow icon={Languages} title="Linguistic Grid" subtitle="Regional semantic translation" onClick={() => setActiveView('language')} />
               <SettingRow icon={HelpCircle} title="Support Hub" subtitle="Help Center & diagnostics" onClick={() => setActiveView('help')} />
@@ -1169,7 +1474,6 @@ export const ProfileScreen: React.FC = () => {
            </div>
         </div>
 
-        {/* Display Control */}
         <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
            <SettingRow 
              icon={theme === 'light' ? Sun : Moon} 
@@ -1194,6 +1498,7 @@ export const ProfileScreen: React.FC = () => {
       {activeView === 'accessibility' && renderAccessibility()}
       {activeView === 'language' && renderLanguage()}
       {activeView === 'help' && renderHelp()}
+      {activeView === 'devices' && renderDevices()}
     </div>
   );
 };

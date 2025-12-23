@@ -352,7 +352,18 @@ export const api = {
       try {
         const { data, error } = await supabase.from('stories').select('*').order('created_at', { ascending: false });
         if (error) throw error;
-        return ((data || []) as any[]).map(d => ({ id: d.id, userId: d.user_id, userName: d.user_name, userAvatar: d.user_avatar, image: d.image_url, timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), viewed: false, caption: d.caption }));
+        // Correcting property mapping to match Story interface
+        return ((data || []) as any[]).map(d => ({ 
+          id: d.id, 
+          userId: d.user_id, 
+          userName: d.user_name, 
+          userAvatar: d.user_avatar, 
+          type: 'image',
+          content: d.image_url, 
+          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+          viewed: false, 
+          caption: d.caption 
+        }));
       } catch (e) { return []; }
     },
     addStory: async (image: string, caption: string): Promise<Story> => {
@@ -369,12 +380,14 @@ export const api = {
       
       if (error) throw new Error(formatError(error, "Failed to share story"));
       const d = data as any;
+      // Correcting property mapping to match Story interface
       return { 
         id: d.id, 
         userId: d.user_id, 
         userName: d.user_name, 
         userAvatar: d.user_avatar, 
-        image: d.image_url, 
+        type: 'image',
+        content: d.image_url, 
         timestamp: 'Just now', 
         viewed: false, 
         caption: d.caption 

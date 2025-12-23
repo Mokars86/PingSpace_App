@@ -27,6 +27,7 @@ export interface Message {
   type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'payment' | 'product' | 'system';
   metadata?: any;
   isStarred?: boolean;
+  status?: 'sent' | 'delivered' | 'read';
   replyTo?: {
     id: string;
     text: string;
@@ -115,10 +116,12 @@ export interface Story {
   userId: string;
   userName: string;
   userAvatar: string;
-  image: string;
+  type: 'image' | 'text';
+  content: string; // image url or text content
   timestamp: string;
   viewed: boolean;
   caption?: string;
+  background?: string; // For text stories
 }
 
 export interface ActiveCall {
@@ -132,6 +135,7 @@ export interface ActiveCall {
 }
 
 export interface AppSettings {
+  language: string;
   notifications: {
     push: boolean;
     email: boolean;

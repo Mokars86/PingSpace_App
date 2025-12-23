@@ -8,7 +8,7 @@ import {
   Reply, Clock, Heart, Timer, Trash2, Download, ExternalLink, CheckCircle,
   MessageCircle, Zap, Star, ChevronDown, Filter, Settings, Palette,
   Music, File as FileIcon, Navigation, Volume2, StopCircle, Ghost, Flame,
-  Pin, PinOff
+  Pin, PinOff, Smile
 } from 'lucide-react';
 import { User, Message, ChatSession, SummaryResult } from '../types';
 import { sendMessageToGemini, generateChatSummary, getQuickSuggestions } from '../services/geminiService';
@@ -54,34 +54,54 @@ const getDateLabel = (timestamp: number) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// --- Countdown Timer Component for Disappearing Messages ---
+// --- Glowing Read Receipts ---
+const NeuralReadReceipt: React.FC<{ status?: Message['status'] }> = ({ status }) => {
+  if (!status) return null;
+  return (
+    <div className="flex items-center">
+      {status === 'sent' && <Check className="w-3 h-3 text-slate-400" />}
+      {status === 'delivered' && <CheckCheck className="w-3 h-3 text-slate-400" />}
+      {status === 'read' && (
+        <div className="relative">
+          <CheckCheck className="w-3 h-3 text-[#ff1744]" />
+          <div className="absolute inset-0 bg-[#ff1744] blur-sm opacity-50 animate-pulse"></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Message Expiry Countdown Timer ---
 const MessageExpiryTimer: React.FC<{ expiresAt: number }> = ({ expiresAt }) => {
   const [timeLeft, setTimeLeft] = useState(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)));
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newTime = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-      setTimeLeft(newTime);
-      if (newTime <= 0) clearInterval(interval);
-    }, 500);
-    return () => clearInterval(interval);
+    const timer = setInterval(() => {
+      const nextTime = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      setTimeLeft(nextTime);
+      if (nextTime <= 0) clearInterval(timer);
+    }, 1000);
+    return () => clearInterval(timer);
   }, [expiresAt]);
 
   if (timeLeft <= 0) return null;
 
   return (
-    <div className="flex items-center gap-1 text-[9px] font-black text-white/70 bg-black/20 px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-      <Timer className="w-2.5 h-2.5 animate-pulse" />
-      <span>{timeLeft}s</span>
+    <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20">
+      <Timer className="w-2.5 h-2.5 text-[#ff1744] animate-pulse" />
+      <span className="text-[8px] font-black text-white">{timeLeft}s</span>
     </div>
   );
 };
 
-// --- Custom Audio Player for Chat Bubbles ---
+// --- Custom Audio Player with Waveform ---
 const CustomAudioPlayer: React.FC<{ url: string; duration?: string; isMine: boolean }> = ({ url, duration, isMine }) => {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [progress, setProgress] = useState(0);
+  
+  // Simulated Waveform Data
+  const bars = useMemo(() => Array.from({ length: 30 }, () => Math.random() * 80 + 20), []);
 
   const togglePlay = () => {
     if (audioRef.current) {
@@ -99,51 +119,50 @@ const CustomAudioPlayer: React.FC<{ url: string; duration?: string; isMine: bool
   };
 
   return (
-    <div className={`flex items-center gap-3 p-3 rounded-2xl min-w-[220px] ${isMine ? 'bg-white/10' : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700'}`}>
+    <div className={`flex items-center gap-4 p-4 rounded-[2rem] min-w-[260px] ${isMine ? 'bg-black/10' : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-inner'}`}>
       <audio ref={audioRef} src={url} onTimeUpdate={handleTimeUpdate} onEnded={() => setPlaying(false)} className="hidden" />
       <button 
         onClick={togglePlay}
-        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isMine ? 'bg-white text-[#ff1744]' : 'bg-[#ff1744] text-white'} shadow-lg`}
+        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMine ? 'bg-white text-[#ff1744]' : 'bg-[#ff1744] text-white'} shadow-xl active:scale-90`}
       >
-        {playing ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+        {playing ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-0.5" />}
       </button>
-      <div className="flex-1 space-y-1.5">
-        <div className="h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-          <div className={`h-full transition-all duration-300 ${isMine ? 'bg-white' : 'bg-[#ff1744]'}`} style={{ width: `${progress}%` }}></div>
+      
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="flex items-end gap-[2px] h-8 pt-1">
+           {bars.map((height, i) => {
+             const isActive = (i / bars.length) * 100 < progress;
+             return (
+               <div 
+                 key={i} 
+                 className={`w-1 rounded-full transition-all duration-300 ${isActive ? (isMine ? 'bg-white' : 'bg-[#ff1744]') : (isMine ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700')}`} 
+                 style={{ height: `${height}%` }}
+               ></div>
+             );
+           })}
         </div>
-        <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest opacity-60">
-          <span>{duration || 'Voice Note'}</span>
-          <Volume2 className="w-3 h-3" />
+        <div className="flex justify-between items-center px-1">
+           <span className={`text-[9px] font-black uppercase tracking-widest ${isMine ? 'text-white/60' : 'text-slate-400'}`}>{duration || 'Neural Feed'}</span>
+           <Volume2 className={`w-3 h-3 ${isMine ? 'text-white/40' : 'text-slate-300'}`} />
         </div>
       </div>
     </div>
   );
 };
 
-// --- NEW CHAT / GROUP MODAL ---
 const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: User[]; onSelect: (userId: string) => void }> = ({ isOpen, onClose, contacts, onSelect }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
-  
   const dispatch = useGlobalDispatch();
-
   if (!isOpen) return null;
-
-  const filteredContacts = contacts.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const toggleContactSelection = (id: string) => {
-    if (selectedContacts.includes(id)) {
-      setSelectedContacts(prev => prev.filter(c => c !== id));
-    } else {
-      setSelectedContacts(prev => [...prev, id]);
-    }
+    if (selectedContacts.includes(id)) setSelectedContacts(prev => prev.filter(c => c !== id));
+    else setSelectedContacts(prev => [...prev, id]);
   };
-
   const handleCreateGroup = async () => {
     if (!groupName || selectedContacts.length === 0) return;
     setCreating(true);
@@ -158,15 +177,7 @@ const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: U
       setCreating(false);
     }
   };
-
-  const resetAndClose = () => {
-    setIsGroupMode(false);
-    setGroupName('');
-    setSelectedContacts([]);
-    setSearchTerm('');
-    onClose();
-  };
-
+  const resetAndClose = () => { setIsGroupMode(false); setGroupName(''); setSelectedContacts([]); setSearchTerm(''); onClose(); };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-sm h-[75vh] shadow-2xl p-0 flex flex-col overflow-hidden animate-in zoom-in-95">
@@ -179,104 +190,53 @@ const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: U
             )}
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">{isGroupMode ? 'New Group' : 'New Chat'}</h3>
           </div>
-          <button onClick={resetAndClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <button onClick={resetAndClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90"><X className="w-5 h-5 text-slate-500" /></button>
         </div>
-
         {isGroupMode && (
           <div className="p-4 bg-gray-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-800">
              <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-[#ff1744]/10 flex items-center justify-center border-2 border-dashed border-[#ff1744]/30">
                    <Users className="w-6 h-6 text-[#ff1744]" />
                 </div>
-                <input 
-                  type="text" 
-                  placeholder="Group Name" 
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  className="flex-1 bg-white dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold focus:outline-none focus:border-[#ff1744]"
-                />
+                <input type="text" placeholder="Group Name" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="flex-1 bg-white dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold focus:outline-none focus:border-[#ff1744]" />
              </div>
           </div>
         )}
-
         <div className="p-4 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search contacts..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all font-medium" 
-            />
+            <input type="text" placeholder="Search contacts..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all font-medium" />
           </div>
         </div>
-
         <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
           {!isGroupMode && !searchTerm && (
             <>
-              <div 
-                onClick={() => onSelect('ping-ai')}
-                className="flex items-center gap-4 p-3 bg-gradient-to-r from-red-50 to-transparent dark:from-[#ff1744]/10 dark:to-transparent rounded-2xl cursor-pointer transition-colors mb-2 border border-red-100 dark:border-red-900/20"
-              >
-                 <div className="w-12 h-12 rounded-full bg-[#ff1744] flex items-center justify-center shadow-lg shadow-red-500/30">
-                    <Sparkles className="w-6 h-6 text-white" />
-                 </div>
+              <div onClick={() => onSelect('ping-ai')} className="flex items-center gap-4 p-3 bg-gradient-to-r from-red-50 to-transparent dark:from-[#ff1744]/10 dark:to-transparent rounded-2xl cursor-pointer transition-colors mb-2 border border-red-100 dark:border-red-900/20">
+                 <div className="w-12 h-12 rounded-full bg-[#ff1744] flex items-center justify-center shadow-lg shadow-red-500/30"><Sparkles className="w-6 h-6 text-white" /></div>
                  <div className="flex-1">
                    <h4 className="font-bold text-slate-900 dark:text-white">PingAI Assistant</h4>
                    <p className="text-xs text-[#ff1744] font-medium">Your personal digital co-pilot</p>
                  </div>
               </div>
-              
-              <div 
-                onClick={() => setIsGroupMode(true)}
-                className="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-2xl cursor-pointer transition-colors mb-2"
-              >
-                 <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-slate-500" />
-                 </div>
-                 <div className="flex-1">
-                   <h4 className="font-bold text-slate-900 dark:text-white">Create New Group</h4>
-                 </div>
+              <div onClick={() => setIsGroupMode(true)} className="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-2xl cursor-pointer transition-colors mb-2">
+                 <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><Users className="w-6 h-6 text-slate-500" /></div>
+                 <div className="flex-1"><h4 className="font-bold text-slate-900 dark:text-white">Create New Group</h4></div>
                  <ChevronRight className="w-5 h-5 text-gray-400" />
               </div>
               <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">All Contacts</div>
             </>
           )}
-
           {filteredContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-              <UserPlus className="w-10 h-10 mb-2 opacity-50" />
-              <p className="text-sm">No contacts found</p>
-            </div>
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400"><UserPlus className="w-10 h-10 mb-2 opacity-50" /><p className="text-sm">No contacts found</p></div>
           ) : (
             filteredContacts.map(contact => {
               const isSelected = selectedContacts.includes(contact.id);
               return (
-                <div 
-                  key={contact.id} 
-                  onClick={() => { 
-                    if (isGroupMode) {
-                      toggleContactSelection(contact.id);
-                    } else {
-                      onSelect(contact.id); 
-                      resetAndClose();
-                    }
-                  }} 
-                  className={`flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all ${isSelected && isGroupMode ? 'bg-[#ff1744]/10 border border-[#ff1744]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800 border border-transparent'}`}
-                >
+                <div key={contact.id} onClick={() => { if (isGroupMode) toggleContactSelection(contact.id); else { onSelect(contact.id); resetAndClose(); } }} className={`flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all ${isSelected && isGroupMode ? 'bg-[#ff1744]/10 border border-[#ff1744]/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800 border border-transparent'}`}>
                   <div className="relative">
                     <img src={contact.avatar} alt={contact.name} className="w-12 h-12 rounded-full object-cover shadow-sm" />
-                    {contact.isOnline && !isGroupMode && (
-                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>
-                    )}
-                    {isGroupMode && isSelected && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#ff1744] rounded-full border-2 border-white dark:border-slate-950 flex items-center justify-center">
-                         <Check className="w-3 h-3 text-white" />
-                      </div>
-                    )}
+                    {contact.isOnline && !isGroupMode && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>}
+                    {isGroupMode && isSelected && <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#ff1744] rounded-full border-2 border-white dark:border-slate-950 flex items-center justify-center"><Check className="w-3 h-3 text-white" /></div>}
                   </div>
                   <div className="flex-1">
                     <h4 className="font-bold text-slate-900 dark:text-white">{contact.name}</h4>
@@ -287,20 +247,10 @@ const NewChatModal: React.FC<{ isOpen: boolean; onClose: () => void; contacts: U
             })
           )}
         </div>
-
         {isGroupMode && (
            <div className="p-4 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-              <div className="flex items-center justify-between mb-3">
-                 <span className="text-sm font-bold text-slate-500">{selectedContacts.length} selected</span>
-              </div>
-              <button 
-                onClick={handleCreateGroup}
-                disabled={!groupName || selectedContacts.length === 0 || creating}
-                className="w-full py-3.5 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-              >
-                {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                Create Group
-              </button>
+              <div className="flex items-center justify-between mb-3"><span className="text-sm font-bold text-slate-500">{selectedContacts.length} selected</span></div>
+              <button onClick={handleCreateGroup} disabled={!groupName || selectedContacts.length === 0 || creating} className="w-full py-3.5 bg-[#ff1744] text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">{creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />} Create Group</button>
            </div>
         )}
       </div>
@@ -313,14 +263,10 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
   const dispatch = useGlobalDispatch();
 
   const handleContactSelect = async (userId: string) => {
-    if (userId === 'ping-ai') {
-      onSelectChat('ping-ai-session');
-      return;
-    }
+    if (userId === 'ping-ai') { onSelectChat('ping-ai-session'); return; }
     const existingChat = chats.find(c => c.participant.id === userId && !c.isGroup);
-    if (existingChat) {
-      onSelectChat(existingChat.id);
-    } else {
+    if (existingChat) onSelectChat(existingChat.id);
+    else {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
         const newChat = await api.chats.createChat(userId);
@@ -337,10 +283,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
     e.stopPropagation();
     const nextPinned = !chat.isPinned;
     dispatch({ type: 'TOGGLE_PIN_CHAT', payload: { chatId: chat.id, isPinned: nextPinned } });
-    try {
-      await api.chats.togglePin(chat.id, nextPinned);
-    } catch (err: any) {
-      // Revert if failed
+    try { await api.chats.togglePin(chat.id, nextPinned); } catch (err: any) {
       dispatch({ type: 'TOGGLE_PIN_CHAT', payload: { chatId: chat.id, isPinned: !nextPinned } });
       dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Sync failed.' } });
     }
@@ -348,13 +291,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
 
   return (
     <div className="flex flex-col h-full pb-20 overflow-y-auto bg-gray-50 dark:bg-slate-950 transition-colors relative no-scrollbar">
-      <NewChatModal 
-        isOpen={showNewChat} 
-        onClose={() => setShowNewChat(false)} 
-        contacts={contacts} 
-        onSelect={handleContactSelect} 
-      />
-
+      <NewChatModal isOpen={showNewChat} onClose={() => setShowNewChat(false)} contacts={contacts} onSelect={handleContactSelect} />
       <div className="px-4 py-4">
         <h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase mb-3 tracking-[0.2em] px-1">Pinned Pings</h3>
         <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-2 px-2">
@@ -364,33 +301,18 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
                 <div className="p-0.5 rounded-full bg-gradient-to-tr from-[#ff1744] to-red-400">
                   <img src={chat.participant.avatar} alt={chat.participant.name} className="w-14 h-14 rounded-full border-2 border-white dark:border-slate-800 shadow-md object-cover" />
                 </div>
-                {chat.participant.isOnline && (
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>
-                )}
-                <div className="absolute -top-1 -right-1">
-                   <button 
-                    onClick={(e) => handleTogglePin(e, chat)}
-                    className="p-1 bg-white dark:bg-slate-800 rounded-full shadow-md text-[#ff1744] border border-gray-100 dark:border-slate-700"
-                   >
-                     <PinOff className="w-3 h-3" />
-                   </button>
-                </div>
+                {chat.participant.isOnline && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>}
+                <div className="absolute -top-1 -right-1"><button onClick={(e) => handleTogglePin(e, chat)} className="p-1 bg-white dark:bg-slate-800 rounded-full shadow-md text-[#ff1744] border border-gray-100 dark:border-slate-700"><PinOff className="w-3 h-3" /></button></div>
               </div>
               <span className="text-[10px] mt-2 font-black text-slate-700 dark:text-slate-300 truncate w-16 text-center uppercase tracking-tighter">{chat.participant.name.split(' ')[0]}</span>
             </div>
           ))}
-          {chats.filter(c => c.isPinned).length === 0 && (
-             <div className="py-2 opacity-30 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2">No pinned chats</div>
-          )}
+          {chats.filter(c => c.isPinned).length === 0 && <div className="py-2 opacity-30 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2">No pinned chats</div>}
         </div>
       </div>
-
       <div className="px-4 py-2 flex-1 bg-white dark:bg-slate-900 rounded-t-[3rem] shadow-[0_-10px_40px_rgba(0,0,0,0.04)] min-h-[500px]">
         <div className="w-12 h-1.5 bg-gray-200 dark:bg-slate-800 rounded-full mx-auto my-3 mb-6"></div>
-        <div className="flex justify-between items-center mb-4 px-2">
-           <h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Recent Broadcasts</h3>
-           <Filter className="w-4 h-4 text-slate-300" />
-        </div>
+        <div className="flex justify-between items-center mb-4 px-2"><h3 className="text-gray-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Recent Broadcasts</h3><Filter className="w-4 h-4 text-slate-300" /></div>
         <div className="space-y-1">
           {chats.map(chat => (
             <div key={chat.id} onClick={() => onSelectChat(chat.id)} className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 p-3 rounded-3xl transition-all duration-300 active:scale-[0.98] group">
@@ -400,47 +322,23 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, contacts, onSelectCha
                   {chat.isPinned && <Pin className="absolute -top-1 -left-1 w-4 h-4 text-[#ff1744] fill-[#ff1744]" />}
                 </div>
                 <div className="overflow-hidden">
-                  <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 uppercase tracking-tight">
-                     {chat.participant.name}
-                     {chat.isGroup && <Users className="w-3 h-3 text-[#ff1744]" />}
-                  </h4>
-                  <p className={`text-sm truncate w-48 font-medium ${chat.unread > 0 ? 'text-slate-900 dark:text-white font-black' : 'text-gray-400 dark:text-slate-500'}`}>
-                    {typeof chat.lastMessage === 'string' ? chat.lastMessage : 'Media message'}
-                  </p>
+                  <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-1 uppercase tracking-tight">{chat.participant.name}{chat.isGroup && <Users className="w-3 h-3 text-[#ff1744]" />}</h4>
+                  <p className={`text-sm truncate w-48 font-medium ${chat.unread > 0 ? 'text-slate-900 dark:text-white font-black' : 'text-gray-400 dark:text-slate-500'}`}>{typeof chat.lastMessage === 'string' ? chat.lastMessage : 'Media message'}</p>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={(e) => handleTogglePin(e, chat)}
-                    className="p-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-[#ff1744]/10 text-[#ff1744]"
-                  >
-                    {chat.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
-                  </button>
+                  <button onClick={(e) => handleTogglePin(e, chat)} className="p-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-[#ff1744]/10 text-[#ff1744]">{chat.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}</button>
                   <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{chat.lastTime}</span>
                 </div>
-                {chat.unread > 0 && (
-                  <div className="px-2 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
-                    {chat.unread}
-                  </div>
-                )}
+                {chat.unread > 0 && <div className="px-2 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">{chat.unread}</div>}
               </div>
             </div>
           ))}
-          {chats.length === 0 && (
-             <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center">
-                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                   <MessageCircle className="w-8 h-8 text-gray-300" />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Zero active transmission</p>
-             </div>
-          )}
+          {chats.length === 0 && <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center"><div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><MessageCircle className="w-8 h-8 text-gray-300" /></div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Zero active transmission</p></div>}
         </div>
       </div>
-      
-      <button onClick={() => setShowNewChat(true)} className="fixed bottom-24 right-6 w-16 h-16 bg-[#ff1744] rounded-[2rem] shadow-2xl shadow-red-500/40 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all z-10">
-        <Plus className="w-8 h-8" />
-      </button>
+      <button onClick={() => setShowNewChat(true)} className="fixed bottom-24 right-6 w-16 h-16 bg-[#ff1744] rounded-[2rem] shadow-2xl shadow-red-500/40 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all z-10"><Plus className="w-8 h-8" /></button>
     </div>
   );
 };
@@ -457,76 +355,17 @@ const SendMoneyChatModal: React.FC<{ isOpen: boolean; onClose: () => void; onSen
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
   const [step, setStep] = useState<'amount' | 'pin'>('amount');
-
   if (!isOpen) return null;
-
-  const handleNext = () => {
-    if (amount && parseFloat(amount) > 0) setStep('pin');
-  };
-
-  const handleConfirm = () => {
-    if (pin.length === 4) {
-      onSend(parseFloat(amount));
-      onClose();
-      setAmount('');
-      setPin('');
-      setStep('amount');
-    }
-  };
-
+  const handleNext = () => { if (amount && parseFloat(amount) > 0) setStep('pin'); };
+  const handleConfirm = () => { if (pin.length === 4) { onSend(parseFloat(amount)); onClose(); setAmount(''); setPin(''); setStep('amount'); } };
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
        <div className="bg-white dark:bg-slate-900 w-full max-w-xs rounded-[3rem] p-8 shadow-2xl animate-in zoom-in-95 border border-white/10">
-          <div className="flex justify-between items-center mb-8">
-             <h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Dispatch Asset</h3>
-             <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
-          </div>
-          
+          <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight">Dispatch Asset</h3><button onClick={onClose} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full"><X className="w-4 h-4 text-gray-400" /></button></div>
           {step === 'amount' ? (
-            <div className="space-y-8">
-              <div className="relative text-center">
-                 <span className="absolute left-0 top-0 text-2xl font-black text-[#ff1744]">$</span>
-                 <input 
-                   type="number" 
-                   value={amount}
-                   onChange={(e) => setAmount(e.target.value)}
-                   className="w-full bg-transparent text-center text-6xl font-black text-slate-900 dark:text-white focus:outline-none placeholder-slate-200 dark:placeholder-slate-800"
-                   placeholder="0"
-                   autoFocus
-                 />
-              </div>
-              <button 
-                onClick={handleNext}
-                disabled={!amount}
-                className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs"
-              >
-                Continue
-              </button>
-            </div>
+            <div className="space-y-8"><div className="relative text-center"><span className="absolute left-0 top-0 text-2xl font-black text-[#ff1744]">$</span><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-transparent text-center text-6xl font-black text-slate-900 dark:text-white focus:outline-none placeholder-slate-200 dark:placeholder-slate-800" placeholder="0" autoFocus /></div><button onClick={handleNext} disabled={!amount} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs">Continue</button></div>
           ) : (
-            <div className="space-y-8 text-center">
-               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Verify Secure PIN</p>
-               <div className="flex justify-center gap-4">
-                 {[1,2,3,4].map((_, i) => (
-                    <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${pin.length > i ? 'bg-[#ff1744] border-[#ff1744] scale-125' : 'border-gray-200 dark:border-slate-700'}`}></div>
-                 ))}
-               </div>
-               <div className="grid grid-cols-3 gap-4">
-                  {[1,2,3,4,5,6,7,8,9].map(n => (
-                    <button key={n} onClick={() => setPin(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">{n}</button>
-                  ))}
-                  <div className="h-14"></div>
-                  <button onClick={() => setPin(prev => (prev.length < 4 ? prev + '0' : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">0</button>
-                  <button onClick={() => setPin(prev => prev.slice(0, -1))} className="h-14 rounded-2xl flex items-center justify-center text-slate-300 hover:text-[#ff1744]"><Trash2 className="w-6 h-6" /></button>
-               </div>
-               <button 
-                  onClick={handleConfirm}
-                  disabled={pin.length !== 4}
-                  className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs"
-                >
-                  Authorize Transfer
-                </button>
-            </div>
+            <div className="space-y-8 text-center"><p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Verify Secure PIN</p><div className="flex justify-center gap-4">{[1,2,3,4].map((_, i) => (<div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${pin.length > i ? 'bg-[#ff1744] border-[#ff1744] scale-125' : 'border-gray-200 dark:border-slate-700'}`}></div>))}</div><div className="grid grid-cols-3 gap-4">{[1,2,3,4,5,6,7,8,9].map(n => (<button key={n} onClick={() => setPin(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">{n}</button>))}<div className="h-14"></div><button onClick={() => setPin(prev => (prev.length < 4 ? prev + '0' : prev))} className="h-14 rounded-2xl bg-gray-50 dark:bg-slate-800 font-black text-xl hover:bg-[#ff1744] hover:text-white transition-all">0</button><button onClick={() => setPin(prev => prev.slice(0, -1))} className="h-14 rounded-2xl flex items-center justify-center text-slate-300 hover:text-[#ff1744]"><Trash2 className="w-6 h-6" /></button></div><button onClick={handleConfirm} disabled={pin.length !== 4} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/40 hover:bg-red-600 disabled:opacity-50 transition-all uppercase tracking-widest text-xs">Authorize Transfer</button></div>
           )}
        </div>
     </div>
@@ -541,7 +380,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState<SummaryResult | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  
   const [showAttachments, setShowAttachments] = useState(false);
   const [showMoneyModal, setShowMoneyModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -550,58 +388,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
   const [isSearching, setIsSearching] = useState(false);
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-  
+  const [activeReactionId, setActiveReactionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<any>(null);
-
   const [buzzCooldown, setBuzzCooldown] = useState(0);
   const [isBuzzing, setIsBuzzing] = useState(false);
 
   const isBot = session.participant.id === 'ping-ai';
-
   const filteredMessages = useMemo(() => {
     let msgs = session.messages;
     if (showStarredOnly) msgs = msgs.filter(m => m.isStarred);
-    if (isSearching && searchQuery.trim()) {
-      msgs = msgs.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
+    if (isSearching && searchQuery.trim()) msgs = msgs.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
     return msgs;
   }, [session.messages, searchQuery, isSearching, showStarredOnly]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => {
     scrollToBottom();
-    // Fetch AI suggestions if the last message is from the other user
     const lastMsg = session.messages[session.messages.length - 1];
-    if (lastMsg && lastMsg.senderId !== currentUser.id && lastMsg.type === 'text') {
-      getQuickSuggestions(lastMsg.text).then(setAiSuggestions);
-    } else {
-      setAiSuggestions([]);
-    }
+    if (lastMsg && lastMsg.senderId !== currentUser.id && lastMsg.type === 'text') getQuickSuggestions(lastMsg.text).then(setAiSuggestions);
+    else setAiSuggestions([]);
   }, [session.messages.length]);
 
-  // Unified interval for message expiration and UI state
   useEffect(() => {
     const interval = setInterval(() => {
       const hasExpiring = session.messages.some(m => m.expiresAt && m.expiresAt > 0);
-      if (hasExpiring) {
-        dispatch({ type: 'DELETE_EXPIRED_MESSAGES', payload: { sessionId: session.id } });
-      }
-    }, 1000); // 1s interval for smoother expiry UX
+      if (hasExpiring) dispatch({ type: 'DELETE_EXPIRED_MESSAGES', payload: { sessionId: session.id } });
+    }, 1000);
     return () => clearInterval(interval);
   }, [session.messages, session.id, dispatch]);
 
-  // Independent cooldown timer for high frequency updates
   useEffect(() => {
     if (buzzCooldown > 0) {
       const timer = setTimeout(() => setBuzzCooldown(prev => prev - 1), 1000);
@@ -610,167 +432,62 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
   }, [buzzCooldown]);
 
   useEffect(() => {
-    const handleTypingStatus = (data: any) => {
-      if (data.chatId === session.id && data.userId !== currentUser.id) {
-        setIsTyping(data.isTyping);
-      }
-    };
-    
-    const handleIncomingBuzz = (data: any) => {
-      if (data.chatId === session.id && data.userId !== currentUser.id) {
-        // Receivers get the shake, vibration AND Strike animation
-        if ('vibrate' in navigator) navigator.vibrate([400, 100, 400]);
-        setIsBuzzing(true);
-        setTimeout(() => setIsBuzzing(false), 1500);
-      }
-    };
-
+    const handleTypingStatus = (data: any) => { if (data.chatId === session.id && data.userId !== currentUser.id) setIsTyping(data.isTyping); };
+    const handleIncomingBuzz = (data: any) => { if (data.chatId === session.id && data.userId !== currentUser.id) { if ('vibrate' in navigator) navigator.vibrate([400, 100, 400]); setIsBuzzing(true); setTimeout(() => setIsBuzzing(false), 1500); } };
     socketService.on('typing_status', handleTypingStatus);
     socketService.on('incoming_buzz', handleIncomingBuzz);
-    return () => {
-      socketService.off('typing_status', handleTypingStatus);
-      socketService.off('incoming_buzz', handleIncomingBuzz);
-    };
+    return () => { socketService.off('typing_status', handleTypingStatus); socketService.off('incoming_buzz', handleIncomingBuzz); };
   }, [session.id, currentUser.id]);
 
-  const handleBuzz = () => {
-    if (buzzCooldown > 0) return;
-    
-    // Tactile feedback for sender
-    if ('vibrate' in navigator) navigator.vibrate(100);
-    
-    // Trigger local strike for sender too for visual parity
-    setIsBuzzing(true);
-    setTimeout(() => setIsBuzzing(false), 1500);
-
-    socketService.broadcastBuzz(session.id, currentUser.id);
-    setBuzzCooldown(30);
-
-    // Persistent Buzz in history
-    onSendMessage(session.id, 'BUZZ!', 'system');
-  };
-
-  const toggleDisappearingMode = () => {
-    const nextState = !session.disappearingMode;
-    dispatch({ type: 'TOGGLE_DISAPPEARING_MODE', payload: { sessionId: session.id, enabled: nextState } });
-    onSendMessage(session.id, `Disappearing Pings ${nextState ? 'ON (10s)' : 'OFF'}`, 'system');
-    setShowMenu(false);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-     const text = e.target.value;
-     setInputText(text);
-     if (text.trim().length > 0) {
-        socketService.broadcastTyping(session.id, currentUser.id, true);
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => {
-           socketService.broadcastTyping(session.id, currentUser.id, false);
-        }, 2000);
-     } else {
-        socketService.broadcastTyping(session.id, currentUser.id, false);
-     }
-  };
-
+  const handleBuzz = () => { if (buzzCooldown > 0) return; if ('vibrate' in navigator) navigator.vibrate(100); setIsBuzzing(true); setTimeout(() => setIsBuzzing(false), 1500); socketService.broadcastBuzz(session.id, currentUser.id); setBuzzCooldown(30); onSendMessage(session.id, 'BUZZ!', 'system'); };
+  const toggleDisappearingMode = () => { const nextState = !session.disappearingMode; dispatch({ type: 'TOGGLE_DISAPPEARING_MODE', payload: { sessionId: session.id, enabled: nextState } }); onSendMessage(session.id, `Disappearing Pings ${nextState ? 'ON (10s)' : 'OFF'}`, 'system'); setShowMenu(false); };
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => { const text = e.target.value; setInputText(text); if (text.trim().length > 0) { socketService.broadcastTyping(session.id, currentUser.id, true); if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = setTimeout(() => socketService.broadcastTyping(session.id, currentUser.id, false), 2000); } else socketService.broadcastTyping(session.id, currentUser.id, false); };
   const handleSend = async (overrideText?: string) => {
     const text = overrideText || inputText;
     if (!text.trim()) return;
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     socketService.broadcastTyping(session.id, currentUser.id, false);
-    
-    setInputText('');
-    setReplyingTo(null);
-    setAiSuggestions([]);
-
+    setInputText(''); setReplyingTo(null); setAiSuggestions([]);
     const expiresAt = session.disappearingMode ? Date.now() + 10000 : undefined;
-    
-    const replyPayload = replyingTo ? {
-      id: replyingTo.id,
-      text: typeof replyingTo.text === 'string' ? replyingTo.text : 'Media',
-      sender: replyingTo.senderId === currentUser.id ? 'You' : session.participant.name
-    } : undefined;
-
+    const replyPayload = replyingTo ? { id: replyingTo.id, text: typeof replyingTo.text === 'string' ? replyingTo.text : 'Media', sender: replyingTo.senderId === currentUser.id ? 'You' : session.participant.name } : undefined;
     onSendMessage(session.id, text, 'text', undefined, replyPayload, expiresAt);
+    if (isBot) { setIsTyping(true); const history = session.messages.map(m => ({ role: (m.senderId === currentUser.id ? 'user' : 'model') as 'user' | 'model', parts: [{ text: m.text }] })); const response = await sendMessageToGemini(history, text); setIsTyping(false); onBotResponse(session.id, response); }
+  };
 
-    if (isBot) {
-      setIsTyping(true);
-      const history = session.messages.map(m => ({
-        role: (m.senderId === currentUser.id ? 'user' : 'model') as 'user' | 'model',
-        parts: [{ text: m.text }]
-      }));
-      const response = await sendMessageToGemini(history, text);
-      setIsTyping(false);
-      onBotResponse(session.id, response);
-    }
+  const handleReaction = (msgId: string, emoji: string) => {
+    dispatch({ type: 'ADD_REACTION', payload: { sessionId: session.id, messageId: msgId, emoji } });
+    setActiveReactionId(null);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setUploading(true);
-      setShowAttachments(false);
+      setUploading(true); setShowAttachments(false);
       try {
-        const file = files[0];
-        const url = await storageService.uploadFile(file);
-        
+        const file = files[0]; const url = await storageService.uploadFile(file);
         let type: 'image' | 'video' | 'audio' | 'document' = 'document';
-        if (file.type.startsWith('image/')) type = 'image';
-        else if (file.type.startsWith('video/')) type = 'video';
-        else if (file.type.startsWith('audio/')) type = 'audio';
-
-        onSendMessage(session.id, type === 'document' || type === 'audio' ? file.name : '', type, { 
-          url, 
-          fileName: file.name, 
-          fileSize: formatFileSize(file.size),
-          duration: type === 'audio' ? '0:00' : undefined
-        }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined);
-      } catch (error) { 
-        console.error('Upload failed', error); 
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to upload file.' } });
-      } finally { 
-        setUploading(false); 
-      }
+        if (file.type.startsWith('image/')) type = 'image'; else if (file.type.startsWith('video/')) type = 'video'; else if (file.type.startsWith('audio/')) type = 'audio';
+        onSendMessage(session.id, type === 'document' || type === 'audio' ? file.name : '', type, { url, fileName: file.name, fileSize: formatFileSize(file.size), duration: type === 'audio' ? '0:00' : undefined }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined);
+      } catch (error) { dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to upload file.' } }); } finally { setUploading(false); }
     }
   };
 
   const handleLocationSend = () => {
     setShowAttachments(false);
-    if (!navigator.geolocation) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Geolocation not supported.' } });
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        onSendMessage(session.id, `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'location', {
-          lat: latitude,
-          lng: longitude,
-          mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`
-        }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined);
-      },
-      (err) => {
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Could not access location.' } });
-      }
-    );
+    if (!navigator.geolocation) { dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Geolocation not supported.' } }); return; }
+    navigator.geolocation.getCurrentPosition((pos) => { const { latitude, longitude } = pos.coords; onSendMessage(session.id, `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'location', { lat: latitude, lng: longitude, mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}` }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined); }, (err) => dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Could not access location.' } }));
   };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+      mediaRecorderRef.current = mediaRecorder; audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (event) => audioChunksRef.current.push(event.data);
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingDuration(0);
+      mediaRecorder.start(); setIsRecording(true); setRecordingDuration(0);
       recordingTimerRef.current = setInterval(() => setRecordingDuration(prev => prev + 1), 1000);
-      
-      // Tactile feedback
       if ('vibrate' in navigator) navigator.vibrate(50);
-    } catch (err) { 
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Microphone access denied.' } });
-    }
+    } catch (err) { dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Microphone access denied.' } }); }
   };
 
   const stopRecording = (send: boolean) => {
@@ -780,40 +497,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
         mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
         if (send) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          // Fixed shadowing of lucide 'File' icon here by renaming import above.
           const audioFile = new File([audioBlob], "voice_note.webm", { type: 'audio/webm' });
           setUploading(true);
-          try {
-             const url = await storageService.uploadFile(audioFile);
-             onSendMessage(session.id, "", 'audio', { 
-               url, 
-               duration: formatDuration(recordingDuration),
-               fileName: 'Voice Transmission'
-             }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined);
-          } catch(e) { console.error(e); } finally { setUploading(false); }
+          try { const url = await storageService.uploadFile(audioFile); onSendMessage(session.id, "", 'audio', { url, duration: formatDuration(recordingDuration), fileName: 'Voice Transmission' }, undefined, session.disappearingMode ? Date.now() + 10000 : undefined); } catch(e) { console.error(e); } finally { setUploading(false); }
         }
       };
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      mediaRecorderRef.current.stop(); setIsRecording(false);
     }
   };
 
-  const handleStarredToggle = () => {
-     setShowStarredOnly(!showStarredOnly);
-     setShowMenu(false);
-  };
-
-  const handleGenerateSummary = async () => {
-    setShowSummary(true);
-    setSummaryLoading(true);
-    const history = session.messages.map(m => ({
-      sender: m.senderId === currentUser.id ? 'Me' : session.participant.name,
-      text: m.text
-    }));
-    const result = await generateChatSummary(history);
-    setSummaryData(result);
-    setSummaryLoading(false);
-  };
+  const handleGenerateSummary = async () => { setShowSummary(true); setSummaryLoading(true); const history = session.messages.map(m => ({ sender: m.senderId === currentUser.id ? 'Me' : session.participant.name, text: m.text })); const result = await generateChatSummary(history); setSummaryData(result); setSummaryLoading(false); };
 
   let lastDateLabel = '';
 
@@ -822,121 +515,45 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
       <style>{`
         @keyframes shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); } 20%, 40%, 60%, 80% { transform: translateX(8px); } }
         .animate-shake { animation: shake 0.6s cubic-bezier(.36,.07,.19,.97) both; background-color: rgba(255, 23, 68, 0.15); }
-        
         @keyframes buzz-pop { 0% { transform: scale(1); } 50% { transform: scale(1.6); } 100% { transform: scale(1); } }
         .buzz-active { animation: buzz-pop 0.4s cubic-bezier(.36,.07,.19,.97) both; }
-        
-        @keyframes zap-strike {
-          0% { transform: scale(0) rotate(-45deg); opacity: 0; filter: drop-shadow(0 0 0px #ff1744); }
-          15% { transform: scale(2.5) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 40px #ff1744); }
-          25% { transform: scale(2) rotate(-10deg); opacity: 1; }
-          40% { transform: scale(2.3) rotate(5deg); opacity: 0.9; }
-          100% { transform: scale(4) rotate(15deg); opacity: 0; filter: drop-shadow(0 0 60px #ff1744); }
-        }
-        .zap-effect { 
-          animation: zap-strike 1.4s cubic-bezier(.36,.07,.19,.97) forwards; 
-          pointer-events: none;
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 100;
-        }
-
-        @keyframes recording-pulse {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.4); }
-          70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 23, 68, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); }
-        }
+        @keyframes zap-strike { 0% { transform: scale(0) rotate(-45deg); opacity: 0; filter: drop-shadow(0 0 0px #ff1744); } 15% { transform: scale(2.5) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 40px #ff1744); } 25% { transform: scale(2) rotate(-10deg); opacity: 1; } 40% { transform: scale(2.3) rotate(5deg); opacity: 0.9; } 100% { transform: scale(4) rotate(15deg); opacity: 0; filter: drop-shadow(0 0 60px #ff1744); } }
+        .zap-effect { animation: zap-strike 1.4s cubic-bezier(.36,.07,.19,.97) forwards; pointer-events: none; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; }
+        @keyframes recording-pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.4); } 70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 23, 68, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); } }
         .animate-pulse-red { animation: recording-pulse 1.5s infinite; }
       `}</style>
-      
       <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-
-      <SendMoneyChatModal isOpen={showMoneyModal} onClose={() => setShowMoneyModal(false)} onSend={(amt) => {
-          const meta = { amount: amt, status: 'Completed' };
-          const expiresAt = session.disappearingMode ? Date.now() + 10000 : undefined;
-          onSendMessage(session.id, `Sent $${amt}`, 'payment', meta, undefined, expiresAt);
-          api.wallet.transfer(session.participant.name, amt);
-      }} />
-
-      {/* Persistent Visual Strike Overlay on activation */}
-      {isBuzzing && (
-        <div className="zap-effect">
-           <Zap className="w-32 h-32 text-[#ff1744] fill-[#ff1744]" />
-        </div>
-      )}
-      
-      {/* Header */}
+      <SendMoneyChatModal isOpen={showMoneyModal} onClose={() => setShowMoneyModal(false)} onSend={(amt) => { const meta = { amount: amt, status: 'Completed' }; const expiresAt = session.disappearingMode ? Date.now() + 10000 : undefined; onSendMessage(session.id, `Sent $${amt}`, 'payment', meta, undefined, expiresAt); api.wallet.transfer(session.participant.name, amt); }} />
+      {isBuzzing && <div className="zap-effect"><Zap className="w-32 h-32 text-[#ff1744] fill-[#ff1744]" /></div>}
       <div className="flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between p-4">
           {isSearching ? (
              <div className="flex-1 flex items-center gap-3 animate-in slide-in-from-top-2">
                 <button onClick={() => { setIsSearching(false); setSearchQuery(''); }} className="p-2 text-gray-400"><ArrowLeft className="w-5 h-5" /></button>
-                <input 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search conversation..."
-                  className="flex-1 bg-transparent font-bold text-slate-900 dark:text-white outline-none"
-                  autoFocus
-                />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search conversation..." className="flex-1 bg-transparent font-bold text-slate-900 dark:text-white outline-none" autoFocus />
                 {searchQuery && <button onClick={() => setSearchQuery('')} className="p-2"><X className="w-4 h-4 text-gray-400" /></button>}
              </div>
           ) : (
             <>
               <div className="flex items-center gap-3 overflow-hidden">
-                <button onClick={onBack} className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:text-[#ff1744]">
-                  <ArrowLeft className="w-6 h-6" />
-                </button>
+                <button onClick={onBack} className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:text-[#ff1744]"><ArrowLeft className="w-6 h-6" /></button>
                 <div className="flex items-center gap-3">
-                  <div className="relative shrink-0">
-                    <img src={session.participant.avatar} className="w-10 h-10 rounded-2xl border border-gray-100 dark:border-slate-800 object-cover shadow-sm" alt={session.participant.name} />
-                  </div>
-                  <div className="overflow-hidden">
-                    <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">
-                      {session.participant.name}
-                    </h3>
-                    <span className="text-[10px] text-[#ff1744] font-black uppercase tracking-widest flex items-center gap-1">
-                       {isTyping ? 'Syncing...' : (session.participant.isOnline ? 'Online' : 'Offline')}
-                    </span>
-                  </div>
+                  <div className="relative shrink-0"><img src={session.participant.avatar} className="w-10 h-10 rounded-2xl border border-gray-100 dark:border-slate-800 object-cover shadow-sm" alt={session.participant.name} /></div>
+                  <div className="overflow-hidden"><h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">{session.participant.name}</h3><span className="text-[10px] text-[#ff1744] font-black uppercase tracking-widest flex items-center gap-1">{isTyping ? 'Syncing...' : (session.participant.isOnline ? 'Online' : 'Offline')}</span></div>
                 </div>
               </div>
               <div className="flex gap-1 text-[#ff1744] shrink-0">
                 <button onClick={() => setIsSearching(true)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-full transition-all"><Search className="w-5 h-5" /></button>
-                
-                <button 
-                  onClick={handleBuzz} 
-                  disabled={buzzCooldown > 0} 
-                  className={`p-2 rounded-full transition-all relative ${buzzCooldown > 0 ? 'cursor-not-allowed opacity-50 grayscale' : 'hover:bg-red-50 dark:hover:bg-red-900/10'}`}
-                >
-                  <Zap className={`w-5 h-5 transition-all ${buzzCooldown > 0 ? 'text-slate-400' : 'text-[#ff1744] fill-[#ff1744]'} ${isBuzzing ? 'buzz-active scale-125' : ''}`} />
-                  {buzzCooldown > 0 && (
-                    <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-[#ff1744] bg-white/80 dark:bg-slate-900/80 rounded-full">
-                      {buzzCooldown}
-                    </span>
-                  )}
-                </button>
-
+                <button onClick={handleBuzz} disabled={buzzCooldown > 0} className={`p-2 rounded-full transition-all relative ${buzzCooldown > 0 ? 'cursor-not-allowed opacity-50 grayscale' : 'hover:bg-red-50 dark:hover:bg-red-900/10'}`}><Zap className={`w-5 h-5 transition-all ${buzzCooldown > 0 ? 'text-slate-400' : 'text-[#ff1744] fill-[#ff1744]'} ${isBuzzing ? 'buzz-active scale-125' : ''}`} />{buzzCooldown > 0 && (<span className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-[#ff1744] bg-white/80 dark:bg-slate-900/80 rounded-full">{buzzCooldown}</span>)}</button>
                 <div className="relative">
                   <button onClick={() => setShowMenu(!showMenu)} className="p-2 text-gray-400 hover:text-slate-700 dark:hover:text-slate-300"><MoreVertical className="w-5 h-5" /></button>
                   {showMenu && (
                      <div className="absolute right-0 top-12 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-gray-100 dark:border-slate-800 w-64 overflow-hidden z-30 animate-in zoom-in-95 origin-top-right p-2">
-                        <button onClick={handleStarredToggle} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200">
-                           <Star className={`w-4 h-4 ${showStarredOnly ? 'fill-amber-400 text-amber-400' : ''}`} /> {showStarredOnly ? 'Show All Messages' : 'View Bookmarks'}
-                        </button>
-                        <button onClick={toggleDisappearingMode} className={`w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase ${session.disappearingMode ? 'text-[#ff1744]' : 'text-slate-600 dark:text-slate-200'}`}>
-                           <Ghost className={`w-4 h-4 ${session.disappearingMode ? 'animate-bounce' : ''}`} /> {session.disappearingMode ? 'Stop Vanishing' : 'Vanishing Pings'}
-                        </button>
-                        <button onClick={handleGenerateSummary} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200">
-                           <Sparkles className="w-4 h-4 text-[#ff1744]" /> AI Intel Summary
-                        </button>
+                        <button onClick={() => { setShowStarredOnly(!showStarredOnly); setShowMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200"><Star className={`w-4 h-4 ${showStarredOnly ? 'fill-amber-400 text-amber-400' : ''}`} /> {showStarredOnly ? 'Show All Messages' : 'View Bookmarks'}</button>
+                        <button onClick={toggleDisappearingMode} className={`w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase ${session.disappearingMode ? 'text-[#ff1744]' : 'text-slate-600 dark:text-slate-200'}`}><Ghost className={`w-4 h-4 ${session.disappearingMode ? 'animate-bounce' : ''}`} /> {session.disappearingMode ? 'Stop Vanishing' : 'Vanishing Pings'}</button>
+                        <button onClick={handleGenerateSummary} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200"><Sparkles className="w-4 h-4 text-[#ff1744]" /> AI Intel Summary</button>
                         <div className="h-px bg-gray-100 dark:bg-slate-800 my-1 mx-2"></div>
-                        <button className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200">
-                           <Palette className="w-4 h-4" /> Change Skin
-                        </button>
+                        <button className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-3 text-[10px] font-black uppercase text-slate-600 dark:text-slate-200"><Palette className="w-4 h-4" /> Change Skin</button>
                      </div>
                   )}
                 </div>
@@ -944,137 +561,54 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
             </>
           )}
         </div>
-        {session.disappearingMode && (
-          <div className="bg-[#ff1744]/10 py-1 px-4 flex items-center justify-center gap-2 border-t border-[#ff1744]/20 animate-in slide-in-from-top-4">
-             <span className="animate-pulse">🔥</span>
-             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ff1744]">Burning mode active: 10s expiration</span>
-          </div>
-        )}
+        {session.disappearingMode && (<div className="bg-[#ff1744]/10 py-1 px-4 flex items-center justify-center gap-2 border-t border-[#ff1744]/20 animate-in slide-in-from-top-4"><span className="animate-pulse">🔥</span><span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ff1744]">Burning mode active: 10s expiration</span></div>)}
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-slate-950 no-scrollbar relative">
-        {filteredMessages.length === 0 && (
-           <div className="flex flex-col items-center justify-center py-20 opacity-20 text-center">
-              <Search className="w-12 h-12 mb-4" />
-              <p className="text-sm font-black uppercase tracking-widest">No data matching criteria</p>
-           </div>
-        )}
         {filteredMessages.map((msg) => {
           const currentDateLabel = getDateLabel(msg.createdAt);
-          const showDateHeader = currentDateLabel !== lastDateLabel;
-          lastDateLabel = currentDateLabel;
+          const showDateHeader = currentDateLabel !== lastDateLabel; lastDateLabel = currentDateLabel;
           const isMine = msg.senderId === currentUser.id;
 
-          if (msg.type === 'system') {
-             return (
-               <div key={msg.id} className="flex justify-center w-full my-4 animate-in fade-in zoom-in-95">
-                 <div className="bg-[#ff1744]/10 dark:bg-[#ff1744]/5 border-2 border-[#ff1744]/20 px-5 py-2.5 rounded-full flex items-center gap-3 shadow-[0_0_20px_rgba(255,23,68,0.1)] group">
-                    <div className="p-1.5 bg-[#ff1744] rounded-full group-hover:scale-125 transition-transform">
-                      <Zap className="w-4 h-4 text-white fill-white" />
-                    </div>
-                    <span className="text-[11px] font-black uppercase text-[#ff1744] tracking-[0.2em]">{msg.text}</span>
-                 </div>
-               </div>
-             );
-          }
+          if (msg.type === 'system') return (<div key={msg.id} className="flex justify-center w-full my-4 animate-in fade-in zoom-in-95"><div className="bg-[#ff1744]/10 dark:bg-[#ff1744]/5 border-2 border-[#ff1744]/20 px-5 py-2.5 rounded-full flex items-center gap-3 shadow-[0_0_20px_rgba(255,23,68,0.1)] group"><div className="p-1.5 bg-[#ff1744] rounded-full group-hover:scale-125 transition-transform"><Zap className="w-4 h-4 text-white fill-white" /></div><span className="text-[11px] font-black uppercase text-[#ff1744] tracking-[0.2em]">{msg.text}</span></div></div>);
 
           return (
             <React.Fragment key={msg.id}>
-              {showDateHeader && (
-                <div className="flex justify-center my-4 sticky top-0 z-10">
-                   <span className="text-[10px] font-black text-slate-400 bg-white/80 dark:bg-slate-900/80 backdrop-blur px-4 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-sm">
-                     {currentDateLabel}
-                   </span>
-                </div>
-              )}
-              
+              {showDateHeader && (<div className="flex justify-center my-4 sticky top-0 z-10"><span className="text-[10px] font-black text-slate-400 bg-white/80 dark:bg-slate-900/80 backdrop-blur px-4 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-sm">{currentDateLabel}</span></div>)}
               <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} group relative items-end gap-2`}>
                 {!isMine && <img src={session.participant.avatar} className="w-8 h-8 rounded-xl object-cover mb-1 opacity-60 group-hover:opacity-100 transition-opacity" alt="" />}
                 <div 
-                  className={`max-w-[85%] rounded-[1.75rem] shadow-sm relative transition-all p-4 ${
-                    isMine 
-                      ? 'bg-[#ff1744] text-white rounded-tr-none' 
-                      : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-none border border-gray-100 dark:border-slate-700'
-                  } ${msg.expiresAt ? 'ring-2 ring-[#ff1744]/30' : ''}`}
-                  onDoubleClick={() => dispatch({ type: 'TOGGLE_STAR_MESSAGE', payload: { sessionId: session.id, messageId: msg.id } })}
+                  className={`max-w-[85%] rounded-[1.75rem] shadow-sm relative transition-all p-4 ${isMine ? 'bg-[#ff1744] text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-none border border-gray-100 dark:border-slate-700'}`}
+                  onContextMenu={(e) => { e.preventDefault(); setActiveReactionId(msg.id); }}
                 >
-                  {msg.expiresAt && (
-                    <div className={`absolute -top-3 ${isMine ? 'right-0' : 'left-0'} z-10`}>
-                       <MessageExpiryTimer expiresAt={msg.expiresAt} />
+                  {activeReactionId === msg.id && (
+                    <div className="absolute -top-12 left-0 right-0 bg-white dark:bg-slate-900 rounded-full p-2 shadow-2xl flex gap-3 animate-in slide-in-from-bottom-2 border border-gray-100 dark:border-slate-800 z-50 justify-center">
+                       {['❤️', '😂', '😮', '😢', '🔥', '👏'].map(emoji => (
+                         <button key={emoji} onClick={() => handleReaction(msg.id, emoji)} className="text-xl hover:scale-125 transition-transform active:scale-90">{emoji}</button>
+                       ))}
                     </div>
                   )}
 
+                  {msg.reactions && msg.reactions.length > 0 && (
+                    <div className={`absolute -bottom-2 ${isMine ? 'left-0' : 'right-0'} flex gap-1 bg-white dark:bg-slate-700 rounded-full px-2 py-0.5 shadow-sm border border-gray-100 dark:border-slate-600`}>
+                       {msg.reactions.map(r => <span key={r.emoji} className="text-xs">{r.emoji}</span>)}
+                    </div>
+                  )}
+
+                  {msg.expiresAt && (<div className={`absolute -top-3 ${isMine ? 'right-0' : 'left-0'} z-10`}><MessageExpiryTimer expiresAt={msg.expiresAt} /></div>)}
                   {msg.isStarred && <Star className={`absolute -top-1 ${isMine ? '-left-1' : '-right-1'} w-4 h-4 fill-amber-400 text-amber-400 animate-in zoom-in`} />}
-                  
-                  {msg.replyTo && (
-                     <div className={`mb-3 p-2.5 rounded-xl text-xs border-l-4 ${isMine ? 'bg-black/10 border-white/30' : 'bg-gray-100 dark:bg-slate-700 border-[#ff1744]'}`}>
-                        <p className="font-black opacity-60 uppercase tracking-tighter">{msg.replyTo.sender}</p>
-                        <p className="truncate font-medium">{msg.replyTo.text}</p>
-                     </div>
-                  )}
-
+                  {msg.replyTo && (<div className={`mb-3 p-2.5 rounded-xl text-xs border-l-4 ${isMine ? 'bg-black/10 border-white/30' : 'bg-gray-100 dark:bg-slate-700 border-[#ff1744]'}`}><p className="font-black opacity-60 uppercase tracking-tighter">{msg.replyTo.sender}</p><p className="truncate font-medium">{msg.replyTo.text}</p></div>)}
                   {msg.type === 'text' && <p className="whitespace-pre-wrap leading-relaxed font-medium text-[15px]">{msg.text}</p>}
-                  
-                  {msg.type === 'image' && (
-                    <div className="space-y-2">
-                       <img src={msg.metadata?.url} className="rounded-2xl w-full max-h-60 object-cover shadow-sm cursor-pointer" alt="Visual Asset" onClick={() => window.open(msg.metadata?.url)} />
-                       {msg.text && <p className="text-sm">{msg.text}</p>}
-                    </div>
-                  )}
-
-                  {msg.type === 'video' && (
-                    <div className="space-y-2">
-                       <video src={msg.metadata?.url} className="rounded-2xl w-full shadow-sm max-h-60" controls />
-                    </div>
-                  )}
-
-                  {msg.type === 'audio' && (
-                    <CustomAudioPlayer url={msg.metadata?.url} duration={msg.metadata?.duration} isMine={isMine} />
-                  )}
-
-                  {msg.type === 'document' && (
-                    <a href={msg.metadata?.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/10 dark:border-white/10 hover:bg-black/10 transition-colors">
-                      <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white shrink-0">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 overflow-hidden">
-                        <p className="text-xs font-bold truncate">{msg.metadata?.fileName || 'Document'}</p>
-                        <p className="text-[10px] opacity-60 uppercase font-black">{msg.metadata?.fileSize || 'Unknown size'}</p>
-                      </div>
-                      <Download className="w-4 h-4 text-slate-400" />
-                    </a>
-                  )}
-
-                  {msg.type === 'location' && (
-                    <div className="space-y-3">
-                      <div className="aspect-video bg-slate-200 dark:bg-slate-700 rounded-2xl flex items-center justify-center overflow-hidden relative border border-white/20">
-                         <MapPin className="w-8 h-8 text-[#ff1744] animate-bounce" />
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                      </div>
-                      <a href={msg.metadata?.mapUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all">
-                        <div className="flex items-center gap-2">
-                           <Navigation className="w-4 h-4" />
-                           <span className="text-[10px] font-black uppercase tracking-widest">Open in Maps</span>
-                        </div>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  )}
-                  
-                  {msg.type === 'payment' && (
-                     <div className={`p-4 rounded-2xl flex items-center gap-4 ${isMine ? 'bg-white/10' : 'bg-emerald-50 dark:bg-emerald-900/10'}`}>
-                        <div className="w-10 h-10 bg-[#ff1744] rounded-xl flex items-center justify-center text-white"><DollarSign className="w-6 h-6" /></div>
-                        <div><p className="text-lg font-black">${msg.metadata?.amount}</p><p className="text-[9px] font-black uppercase opacity-60">Transmission Confirmed</p></div>
-                     </div>
-                  )}
-
-                  <div className={`flex items-center justify-end gap-1 mt-2 ${isMine ? 'opacity-60' : 'opacity-40'}`}>
+                  {msg.type === 'image' && (<div className="space-y-2"><img src={msg.metadata?.url} className="rounded-2xl w-full max-h-60 object-cover shadow-sm cursor-pointer" alt="Visual" onClick={() => window.open(msg.metadata?.url)} />{msg.text && <p className="text-sm">{msg.text}</p>}</div>)}
+                  {msg.type === 'audio' && <CustomAudioPlayer url={msg.metadata?.url} duration={msg.metadata?.duration} isMine={isMine} />}
+                  {msg.type === 'document' && (<a href={msg.metadata?.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/10 dark:border-white/10 hover:bg-black/10 transition-colors"><div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white shrink-0"><FileText className="w-5 h-5" /></div><div className="flex-1 overflow-hidden"><p className="text-xs font-bold truncate">{msg.metadata?.fileName || 'Document'}</p><p className="text-[10px] opacity-60 uppercase font-black">{msg.metadata?.fileSize || 'Unknown size'}</p></div><Download className="w-4 h-4 text-slate-400" /></a>)}
+                  {msg.type === 'location' && (<div className="space-y-3"><div className="aspect-video bg-slate-200 dark:bg-slate-700 rounded-2xl flex items-center justify-center overflow-hidden relative border border-white/20"><MapPin className="w-8 h-8 text-[#ff1744] animate-bounce" /><div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div></div><a href={msg.metadata?.mapUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><div className="flex items-center gap-2"><Navigation className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-widest">Open in Maps</span></div><ExternalLink className="w-3.5 h-3.5" /></a></div>)}
+                  {msg.type === 'payment' && (<div className={`p-4 rounded-2xl flex items-center gap-4 ${isMine ? 'bg-white/10' : 'bg-emerald-50 dark:bg-emerald-900/10'}`}><div className="w-10 h-10 bg-[#ff1744] rounded-xl flex items-center justify-center text-white"><DollarSign className="w-6 h-6" /></div><div><p className="text-lg font-black">${msg.metadata?.amount}</p><p className="text-[9px] font-black uppercase opacity-60">Transmission Confirmed</p></div></div>)}
+                  <div className={`flex items-center justify-end gap-1.5 mt-2 ${isMine ? 'opacity-60' : 'opacity-40'}`}>
                     <span className="text-[9px] font-black uppercase tracking-tighter">{msg.timestamp}</span>
-                    {isMine && <CheckCheck className="w-3 h-3" />}
+                    {isMine && <NeuralReadReceipt status={msg.status || 'read'} />}
                   </div>
                 </div>
-                
                 <div className={`flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${isMine ? 'items-end' : 'items-start'}`}>
                    <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-gray-100 dark:border-slate-700"><Reply className="w-3.5 h-3.5 text-slate-400" /></button>
                 </div>
@@ -1082,117 +616,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, on
             </React.Fragment>
           );
         })}
-        {isTyping && (
-           <div className="flex justify-start items-center gap-2">
-             <div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-full rounded-tl-none border border-gray-100 dark:border-slate-700 shadow-sm flex gap-1">
-               <span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce"></span>
-               <span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce delay-100"></span>
-               <span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce delay-200"></span>
-             </div>
-           </div>
-        )}
-        {uploading && (
-           <div className="flex justify-center p-4">
-              <div className="bg-white dark:bg-slate-800 px-6 py-3 rounded-full border border-slate-100 dark:border-slate-700 shadow-xl flex items-center gap-3 animate-pulse">
-                 <Loader2 className="w-4 h-4 animate-spin text-[#ff1744]" />
-                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Syncing Media...</span>
-              </div>
-           </div>
-        )}
+        {isTyping && (<div className="flex justify-start items-center gap-2"><div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-full rounded-tl-none border border-gray-100 dark:border-slate-700 shadow-sm flex gap-1"><span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce delay-100"></span><span className="w-1.5 h-1.5 bg-[#ff1744] rounded-full animate-bounce delay-200"></span></div></div>)}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* AI Suggestions & Input */}
       <div className="bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 p-3 pb-8 space-y-3 relative z-30">
-        
-        {aiSuggestions.length > 0 && !inputText && !isRecording && (
-           <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 animate-in slide-in-from-bottom-2">
-              {aiSuggestions.map((suggestion, i) => (
-                 <button 
-                   key={i} 
-                   onClick={() => handleSend(suggestion)}
-                   className="px-4 py-2 bg-[#ff1744]/5 hover:bg-[#ff1744]/10 dark:bg-slate-800 dark:hover:bg-slate-700 border border-[#ff1744]/20 dark:border-slate-700 rounded-full text-[10px] font-black uppercase text-[#ff1744] dark:text-red-400 whitespace-nowrap transition-all active:scale-95"
-                 >
-                    {suggestion}
-                 </button>
-              ))}
-           </div>
-        )}
-
-        {replyingTo && !isRecording && (
-           <div className="flex items-center justify-between bg-[#ff1744]/5 dark:bg-slate-800 p-3 rounded-[1.5rem] border border-[#ff1744]/10 animate-in slide-in-from-bottom-2">
-              <div className="overflow-hidden">
-                 <p className="text-[10px] font-black uppercase text-[#ff1744] mb-0.5">Response Target</p>
-                 <p className="text-xs text-slate-500 truncate">{replyingTo.text || "Media Object"}</p>
-              </div>
-              <button onClick={() => setReplyingTo(null)} className="p-1.5 bg-white dark:bg-slate-700 rounded-full shadow-sm"><X className="w-4 h-4 text-slate-400" /></button>
-           </div>
-        )}
-
+        {aiSuggestions.length > 0 && !inputText && !isRecording && (<div className="flex gap-2 overflow-x-auto no-scrollbar py-1 animate-in slide-in-from-bottom-2">{aiSuggestions.map((suggestion, i) => (<button key={i} onClick={() => handleSend(suggestion)} className="px-4 py-2 bg-[#ff1744]/5 hover:bg-[#ff1744]/10 dark:bg-slate-800 dark:hover:bg-slate-700 border border-[#ff1744]/20 dark:border-slate-700 rounded-full text-[10px] font-black uppercase text-[#ff1744] dark:text-red-400 whitespace-nowrap transition-all active:scale-95">{suggestion}</button>))}</div>)}
+        {replyingTo && !isRecording && (<div className="flex items-center justify-between bg-[#ff1744]/5 dark:bg-slate-800 p-3 rounded-[1.5rem] border border-[#ff1744]/10 animate-in slide-in-from-bottom-2"><div className="overflow-hidden"><p className="text-[10px] font-black uppercase text-[#ff1744] mb-0.5">Response Target</p><p className="text-xs text-slate-500 truncate">{replyingTo.text || "Media Object"}</p></div><button onClick={() => setReplyingTo(null)} className="p-1.5 bg-white dark:bg-slate-700 rounded-full shadow-sm"><X className="w-4 h-4 text-slate-400" /></button></div>)}
         <div className="flex items-end gap-2 bg-gray-50 dark:bg-slate-950 p-2 rounded-[2rem] border border-gray-100 dark:border-slate-800 transition-all focus-within:ring-4 focus-within:ring-[#ff1744]/10">
-           {isRecording ? (
-             <div className="flex-1 flex items-center justify-between px-4 py-2 animate-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-4">
-                   <div className="w-10 h-10 bg-[#ff1744] rounded-full flex items-center justify-center animate-pulse-red">
-                      <Mic className="w-5 h-5 text-white" />
-                   </div>
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black uppercase text-[#ff1744] tracking-widest">Recording</span>
-                      <span className="text-lg font-black text-slate-800 dark:text-white font-mono">{formatDuration(recordingDuration)}</span>
-                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                   <button 
-                     onClick={() => stopRecording(false)} 
-                     className="p-3 bg-slate-200 dark:bg-slate-800 text-slate-500 rounded-full hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"
-                   >
-                     <Trash2 className="w-5 h-5" />
-                   </button>
-                   <button 
-                     onClick={() => stopRecording(true)} 
-                     className="p-3 bg-[#ff1744] text-white rounded-full shadow-xl shadow-red-500/30 hover:scale-105 active:scale-95 transition-all"
-                   >
-                     <StopCircle className="w-6 h-6" />
-                   </button>
-                </div>
-             </div>
-           ) : (
+           {isRecording ? (<div className="flex-1 flex items-center justify-between px-4 py-2 animate-in slide-in-from-bottom-4"><div className="flex items-center gap-4"><div className="w-10 h-10 bg-[#ff1744] rounded-full flex items-center justify-center animate-pulse-red"><Mic className="w-5 h-5 text-white" /></div><div className="flex flex-col"><span className="text-[10px] font-black uppercase text-[#ff1744] tracking-widest">Recording</span><span className="text-lg font-black text-slate-800 dark:text-white font-mono">{formatDuration(recordingDuration)}</span></div></div><div className="flex items-center gap-2"><button onClick={() => stopRecording(false)} className="p-3 bg-slate-200 dark:bg-slate-800 text-slate-500 rounded-full hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"><Trash2 className="w-5 h-5" /></button><button onClick={() => stopRecording(true)} className="p-3 bg-[#ff1744] text-white rounded-full shadow-xl shadow-red-500/30 hover:scale-105 active:scale-95 transition-all"><StopCircle className="w-6 h-6" /></button></div></div>) : (
              <>
                <button onClick={() => setShowAttachments(!showAttachments)} className={`p-3 rounded-full transition-all ${showAttachments ? 'bg-[#ff1744] text-white rotate-45' : 'bg-white dark:bg-slate-800 text-slate-400 hover:text-[#ff1744]'}`}><Plus className="w-6 h-6" /></button>
-               <textarea 
-                value={inputText}
-                onChange={handleInputChange}
-                placeholder="Broadcast message..."
-                className="flex-1 bg-transparent text-slate-800 dark:text-white p-2.5 outline-none resize-none max-h-40 font-bold"
-                rows={1}
-               />
-               {inputText.trim() ? (
-                  <button onClick={() => handleSend()} className="p-3 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/30 hover:scale-105 active:scale-95 transition-all"><Send className="w-6 h-6" /></button>
-               ) : (
-                  <button onClick={startRecording} className="p-3 bg-white dark:bg-slate-800 text-slate-400 rounded-full hover:text-[#ff1744]"><Mic className="w-6 h-6" /></button>
-               )}
+               <textarea value={inputText} onChange={handleInputChange} placeholder="Broadcast message..." className="flex-1 bg-transparent text-slate-800 dark:text-white p-2.5 outline-none resize-none max-h-40 font-bold" rows={1} />
+               {inputText.trim() ? (<button onClick={() => handleSend()} className="p-3 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/30 hover:scale-105 active:scale-95 transition-all"><Send className="w-6 h-6" /></button>) : (<button onClick={startRecording} className="p-3 bg-white dark:bg-slate-800 text-slate-400 rounded-full hover:text-[#ff1744]"><Mic className="w-6 h-6" /></button>)}
              </>
            )}
         </div>
       </div>
-
-      {showAttachments && (
-        <div className="absolute bottom-24 left-6 right-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 rounded-[3rem] p-6 shadow-2xl grid grid-cols-4 gap-6 animate-in zoom-in-95 origin-bottom-left z-40">
-           {[
-              { id: 'img', icon: ImageIcon, label: 'Image', color: 'text-purple-500', action: () => { setShowAttachments(false); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } } },
-              { id: 'vid', icon: Video, label: 'Video', color: 'text-pink-500', action: () => { setShowAttachments(false); if (fileInputRef.current) { fileInputRef.current.accept = 'video/*'; fileInputRef.current.click(); } } },
-              { id: 'mus', icon: Music, label: 'Music', color: 'text-blue-500', action: () => { setShowAttachments(false); if (fileInputRef.current) { fileInputRef.current.accept = 'audio/*'; fileInputRef.current.click(); } } },
-              { id: 'doc', icon: FileIcon, label: 'File', color: 'text-orange-500', action: () => { setShowAttachments(false); if (fileInputRef.current) { fileInputRef.current.accept = '*/*'; fileInputRef.current.click(); } } },
-              { id: 'loc', icon: MapPin, label: 'Location', color: 'text-emerald-500', action: handleLocationSend },
-              { id: 'pay', icon: DollarSign, label: 'Payment', color: 'text-amber-500', action: () => { setShowAttachments(false); setShowMoneyModal(true); } }
-           ].map(item => (
-              <div key={item.id} onClick={item.action} className="flex flex-col items-center gap-2 cursor-pointer group">
-                 <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"><item.icon className={`w-6 h-6 ${item.color}`} /></div>
-                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-              </div>
-           ))}
-        </div>
-      )}
+      {showAttachments && (<div className="absolute bottom-24 left-6 right-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 rounded-[3rem] p-6 shadow-2xl grid grid-cols-4 gap-6 animate-in zoom-in-95 origin-bottom-left z-40">{[{ id: 'img', icon: ImageIcon, label: 'Image', color: 'text-purple-500', action: () => { if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.click(); } } }, { id: 'vid', icon: Video, label: 'Video', color: 'text-pink-500', action: () => { if (fileInputRef.current) { fileInputRef.current.accept = 'video/*'; fileInputRef.current.click(); } } }, { id: 'mus', icon: Music, label: 'Music', color: 'text-blue-500', action: () => { if (fileInputRef.current) { fileInputRef.current.accept = 'audio/*'; fileInputRef.current.click(); } } }, { id: 'doc', icon: FileIcon, label: 'File', color: 'text-orange-500', action: () => { if (fileInputRef.current) { fileInputRef.current.accept = '*/*'; fileInputRef.current.click(); } } }, { id: 'loc', icon: MapPin, label: 'Location', color: 'text-emerald-500', action: handleLocationSend }, { id: 'pay', icon: DollarSign, label: 'Payment', color: 'text-amber-500', action: () => setShowMoneyModal(true) }].map(item => (<div key={item.id} onClick={item.action} className="flex flex-col items-center gap-2 cursor-pointer group"><div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"><item.icon className={`w-6 h-6 ${item.color}`} /></div><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</span></div>))}</div>)}
     </div>
   );
 };
