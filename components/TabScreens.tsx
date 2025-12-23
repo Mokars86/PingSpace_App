@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, Plus, Heart, MessageCircle, Share2, 
@@ -8,20 +7,21 @@ import {
   CreditCard, Send, Scan, Target,
   Zap, TrendingUp,
   Compass, User as UserIcon, ArrowRightLeft, X, Trash2,
-  Lock, Fingerprint, Delete, Check,
+  Lock, Fingerprint, Check,
   ChevronLeft, ChevronRight, Camera, Moon, Sun, ShieldCheck, Key,
   Layout, ListTodo, Calendar, Link, MoreHorizontal,
   UploadCloud, Tag, Star, Truck, MapPin, Globe, Loader2,
-  Radio, Hash, Play, Flame, Landmark, Maximize2, Laptop, Monitor, Mail, ChevronDown,
+  Radio, Hash, Play, Pause, Flame, Landmark, Maximize2, Laptop, Monitor, Mail, ChevronDown,
   Bell, Eye, EyeOff, AlertTriangle, CircleDashed, CheckCircle2, XCircle, Copy, Terminal,
   History, Sparkles, Image as ImageIcon, Box, Layers, MapPin as MapPinIcon, Info as InfoIcon, Edit3, Save,
   Fingerprint as SecurityIcon, Shield as ShieldIcon, RefreshCcw, Languages, Accessibility, 
   MessageSquareHeart, Bug, BookOpen, ShieldAlert, Wallet as WalletIcon, ShoppingCart as MarketIcon,
   Package, Info, MapPin as LocationIcon, CheckCircle, Minus, ShoppingCart as CartIcon, MoveRight,
-  Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu, Type as TypeIcon, HardDrive, MonitorSmartphone
+  Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu, Type as TypeIcon, HardDrive, MonitorSmartphone,
+  Phone, Video, PhoneMissed, VideoOff, SendHorizonal, Smile
 } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
-import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem, User } from '../types';
+import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem, User, CallLog } from '../types';
 import { useGlobalState, useGlobalDispatch } from '../store';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
@@ -29,7 +29,6 @@ import { notificationService } from '../services/notificationService';
 import { supabase } from '../services/supabase';
 import { getCurrencyConversion, CurrencyConversion } from '../services/geminiService';
 
-// --- Shared Setting Components ---
 const SettingRow: React.FC<{ 
   icon: React.ElementType, 
   title: string, 
@@ -77,131 +76,212 @@ const SettingSubHeader: React.FC<{ title: string; onBack: () => void }> = ({ tit
   </div>
 );
 
-// --- Story Components ---
-const StoryViewerModal: React.FC<{ stories: Story[]; onClose: () => void }> = ({ stories, onClose }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+interface UserStoryGroup {
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  stories: Story[];
+}
+
+const StoryViewerModal: React.FC<{ 
+  groups: UserStoryGroup[]; 
+  initialGroupId: string;
+  onClose: () => void;
+}> = ({ groups, initialGroupId, onClose }) => {
+  const [groupIndex, setGroupIndex] = useState(() => {
+    const idx = groups.findIndex(g => g.userId === initialGroupId);
+    return idx === -1 ? 0 : idx;
+  });
+  const [storyIndex, setStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const [reply, setReply] = useState('');
   const dispatch = useGlobalDispatch();
-  const timerRef = useRef<any>(null);
+  const progressTimerRef = useRef<any>(null);
+  const touchStartTimeRef = useRef<number>(0);
 
-  const activeStory = stories[currentIndex];
+  const activeGroup = groups[groupIndex];
+  const activeStory = activeGroup?.stories[storyIndex];
 
   useEffect(() => {
-    if (activeStory) {
+    if (activeStory && !isPaused) {
       setProgress(0);
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       
-      timerRef.current = setInterval(() => {
+      const duration = 5000; // 5 seconds per story
+      const interval = 50; 
+      const step = (interval / duration) * 100;
+
+      progressTimerRef.current = setInterval(() => {
         setProgress(p => {
           if (p >= 100) {
             handleNext();
             return 100;
           }
-          return p + 1.2; 
+          return p + step; 
         });
-      }, 50);
+      }, interval);
+    } else {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     }
-    return () => clearInterval(timerRef.current);
-  }, [currentIndex, stories.length]);
+    return () => clearInterval(progressTimerRef.current);
+  }, [groupIndex, storyIndex, isPaused, groups.length]);
 
   const handleNext = () => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+    if (storyIndex < activeGroup.stories.length - 1) {
+      setStoryIndex(storyIndex + 1);
+      setProgress(0);
+    } else if (groupIndex < groups.length - 1) {
+      setGroupIndex(groupIndex + 1);
+      setStoryIndex(0);
+      setProgress(0);
     } else {
       onClose();
     }
   };
 
   const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+    if (storyIndex > 0) {
+      setStoryIndex(storyIndex - 1);
+      setProgress(0);
+    } else if (groupIndex > 0) {
+      const prevGroup = groups[groupIndex - 1];
+      setGroupIndex(groupIndex - 1);
+      setStoryIndex(prevGroup.stories.length - 1);
+      setProgress(0);
     } else {
       setProgress(0);
     }
   };
 
+  const handleTouchStart = () => {
+    touchStartTimeRef.current = Date.now();
+    setIsPaused(true);
+  };
+
+  const handleTouchEnd = (e: React.MouseEvent | React.TouchEvent) => {
+    const duration = Date.now() - touchStartTimeRef.current;
+    setIsPaused(false);
+
+    if (duration < 200) { // It's a tap
+      const { clientX } = 'touches' in e ? e.touches[0] || (e as any).changedTouches[0] : e as React.MouseEvent;
+      const screenWidth = window.innerWidth;
+      if (clientX < screenWidth / 3) {
+        handlePrev();
+      } else {
+        handleNext();
+      }
+    }
+  };
+
   const handleSendReply = () => {
     if (!reply.trim()) return;
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Transmission sent to ' + activeStory.userName } });
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Reply sent to ' + activeStory.userName } });
     setReply('');
-    onClose();
+    setIsPaused(false);
   };
 
   if (!activeStory) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col animate-in fade-in duration-500">
-       {/* Tap Zones for Navigation */}
-       <div className="absolute inset-0 z-10 flex">
-          <div className="w-1/3 h-full" onClick={handlePrev}></div>
-          <div className="w-1/3 h-full" onClick={onClose}></div>
-          <div className="w-1/3 h-full" onClick={handleNext}></div>
-       </div>
-
-       <div className="absolute top-0 left-0 right-0 p-6 z-20 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none">
-          {/* Multi-segment Progress Bars */}
-          <div className="flex gap-1.5 mb-5">
-             {stories.map((_, idx) => (
-                <div key={idx} className="h-1 bg-white/20 rounded-full flex-1 overflow-hidden">
-                   <div 
-                     className="h-full bg-white transition-all shadow-[0_0_12px_white]" 
-                     style={{ 
-                       width: idx < currentIndex ? '100%' : idx === currentIndex ? `${progress}%` : '0%' 
-                     }}
-                   ></div>
-                </div>
-             ))}
-          </div>
-          <div className="flex justify-between items-center pointer-events-auto">
-             <div className="flex items-center gap-3">
-                <div className="p-0.5 rounded-full bg-gradient-to-tr from-[#ff1744] to-orange-400">
-                  <img src={activeStory.userAvatar} className="w-11 h-11 rounded-full border-2 border-black object-cover" alt={activeStory.userName} />
-                </div>
-                <div>
-                   <h4 className="font-bold text-white text-base tracking-tight">{activeStory.userName}</h4>
-                   <p className="text-[10px] text-white/60 font-black uppercase tracking-widest">{activeStory.timestamp}</p>
-                </div>
-             </div>
-             <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-[#ff1744] rounded-full backdrop-blur-md text-white transition-all">
-                <X className="w-6 h-6" />
-             </button>
-          </div>
-       </div>
-
-       <div className="flex-1 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-in fade-in duration-300 select-none">
+       {/* Story Content Layer */}
+       <div 
+         className="relative flex-1 flex items-center justify-center overflow-hidden"
+         onMouseDown={handleTouchStart}
+         onMouseUp={handleTouchEnd}
+         onTouchStart={handleTouchStart}
+         onTouchEnd={handleTouchEnd}
+       >
           {activeStory.type === 'image' ? (
-             <img src={activeStory.content} className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl" alt="Story" />
+             <>
+               <div className="absolute inset-0 blur-3xl opacity-30 scale-150">
+                  <img src={activeStory.content} className="w-full h-full object-cover" alt="" />
+               </div>
+               <img src={activeStory.content} className="relative z-10 max-w-full max-h-full object-contain shadow-2xl" alt="Story" />
+             </>
           ) : (
-             <div className={`w-full aspect-[9/16] max-w-sm rounded-[3rem] flex items-center justify-center p-12 text-center shadow-2xl ${activeStory.background || 'bg-gradient-to-br from-[#ff1744] to-purple-600'}`}>
-                <h2 className="text-3xl font-black text-white leading-tight uppercase tracking-tighter">{activeStory.content}</h2>
+             <div className={`w-full h-full flex items-center justify-center p-12 text-center transition-all duration-500 ${activeStory.background || 'bg-gradient-to-br from-[#ff1744] to-purple-600'}`}>
+                <h2 className="text-4xl font-black text-white leading-tight uppercase tracking-tighter drop-shadow-lg">{activeStory.content}</h2>
              </div>
           )}
+
+          {/* Overlay Gradients */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 z-20 pointer-events-none"></div>
+
+          {/* Top Controls & Progress Indicators */}
+          <div className="absolute top-0 left-0 right-0 p-4 pt-6 z-30 flex flex-col gap-4">
+             <div className="flex gap-1.5 px-2">
+                {activeGroup.stories.map((_, idx) => (
+                   <div key={idx} className="h-1 bg-white/20 rounded-full flex-1 overflow-hidden">
+                      <div 
+                        className="h-full bg-white transition-all duration-75" 
+                        style={{ 
+                          width: idx < storyIndex ? '100%' : idx === storyIndex ? `${progress}%` : '0%' 
+                        }}
+                      ></div>
+                   </div>
+                ))}
+             </div>
+             
+             <div className="flex justify-between items-center px-2">
+                <div className="flex items-center gap-3">
+                   <div className="p-0.5 rounded-full bg-gradient-to-tr from-[#ff1744] to-orange-400 shadow-lg">
+                     <img src={activeGroup.userAvatar} className="w-10 h-10 rounded-full border-2 border-black object-cover" alt={activeGroup.userName} />
+                   </div>
+                   <div className="flex flex-col">
+                      <h4 className="font-bold text-white text-sm tracking-tight leading-none mb-1">{activeGroup.userName}</h4>
+                      <p className="text-[9px] text-white/60 font-black uppercase tracking-widest">{activeStory.timestamp}</p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                   <button className="p-2 text-white/80 hover:text-white transition-colors"><MoreHorizontal className="w-5 h-5" /></button>
+                   <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md text-white transition-all">
+                      <X className="w-5 h-5" />
+                   </button>
+                </div>
+             </div>
+          </div>
        </div>
 
+       {/* Caption Section */}
        {activeStory.caption && activeStory.type === 'image' && (
-         <div className="px-8 pb-32 flex justify-center text-center z-20 pointer-events-none">
-            <div className="max-w-md px-6 py-4 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10">
-               <p className="text-white font-medium text-lg italic leading-relaxed">"{activeStory.caption}"</p>
-            </div>
+         <div className="absolute bottom-24 left-0 right-0 px-8 flex justify-center text-center z-30 pointer-events-none">
+            <p className="max-w-md text-white font-semibold text-lg drop-shadow-md">{activeStory.caption}</p>
          </div>
        )}
 
-       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent pb-10 z-30">
-          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-2xl p-2 rounded-[2rem] border border-white/10">
-             <input 
-               type="text" 
-               value={reply}
-               onChange={(e) => setReply(e.target.value)}
-               placeholder="Transmit reply..." 
-               className="flex-1 bg-transparent text-white px-4 py-3 outline-none font-bold text-sm"
-             />
-             <button 
-               onClick={handleSendReply}
-               className="p-3 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/30"
-             >
-                <Send className="w-5 h-5" />
-             </button>
+       {/* Reply Bar Layer */}
+       <div className="p-4 pb-8 bg-black z-40">
+          <div className="flex items-center gap-3">
+             <div className="flex-1 flex items-center gap-3 bg-white/10 backdrop-blur-3xl px-4 py-2 rounded-full border border-white/10">
+                <input 
+                  type="text" 
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onFocus={() => setIsPaused(true)}
+                  onBlur={() => setIsPaused(false)}
+                  placeholder="Send a message..." 
+                  className="flex-1 bg-transparent text-white py-2 outline-none font-bold text-sm placeholder-white/40"
+                />
+                <button onClick={handleSendReply} className="text-[#ff1744] hover:scale-110 active:scale-95 transition-all">
+                   <SendHorizonal className="w-5 h-5 fill-current" />
+                </button>
+             </div>
+             <div className="flex gap-2">
+                {['❤️', '🔥', '😂'].map(emoji => (
+                   <button 
+                      key={emoji}
+                      onClick={() => {
+                        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Reacted with ${emoji}` } });
+                        handleNext();
+                      }}
+                      className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full text-xl hover:scale-125 transition-transform"
+                   >
+                      {emoji}
+                   </button>
+                ))}
+             </div>
           </div>
        </div>
     </div>
@@ -261,11 +341,11 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         background: mode === 'text' ? activeBg : undefined
       };
       dispatch({ type: 'ADD_STORY', payload: newStory });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Neural Sync Complete' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Posted successfully' } });
       onClose();
       resetForm();
     } catch (e: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Sync failed.' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Post failed.' } });
     } finally {
       setLoading(false);
     }
@@ -284,17 +364,17 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
           
           <div className="flex items-center gap-4 mb-8">
              <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center justify-center text-[#ff1744]">
-                <Flame className="w-6 h-6" />
+                <Plus className="w-6 h-6" />
              </div>
              <div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Neural Sync</h3>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Share Transmission</p>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Add Story</h3>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Share with friends</p>
              </div>
           </div>
 
           <div className="flex gap-2 mb-8 bg-gray-50 dark:bg-slate-950 p-1.5 rounded-2xl border border-gray-100 dark:border-slate-800">
-             <button onClick={() => setMode('image')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'image' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Visual</button>
-             <button onClick={() => setMode('text')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'text' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Thought</button>
+             <button onClick={() => setMode('image')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'image' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Photo</button>
+             <button onClick={() => setMode('text')} className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'text' ? 'bg-white dark:bg-slate-800 text-[#ff1744] shadow-sm' : 'text-slate-400'}`}>Text</button>
           </div>
 
           {mode === 'image' ? (
@@ -303,13 +383,13 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                    {image ? <img src={image} className="w-full h-full object-cover" alt="Preview" /> : (
                       <>
                         <Camera className="w-10 h-10 text-slate-300 group-hover:text-[#ff1744] transition-colors mb-2" />
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Capture Visual</span>
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Select Image</span>
                       </>
                    )}
                    <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
                    {uploading && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>}
                 </div>
-                <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Neural caption..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all" />
+                <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all" />
              </div>
           ) : (
              <div className="space-y-6">
@@ -317,7 +397,7 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                    <textarea 
                      value={textContent}
                      onChange={(e) => setTextContent(e.target.value)}
-                     placeholder="Enter neural thought..."
+                     placeholder="What's on your mind?"
                      className="w-full bg-transparent text-white text-center text-2xl font-black placeholder-white/40 border-none outline-none resize-none uppercase tracking-tighter"
                      rows={4}
                    />
@@ -337,7 +417,7 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
           <button onClick={handlePost} disabled={loading || uploading || (mode === 'image' ? !image : !textContent)} className="w-full mt-10 py-5 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                <>
-                 <span>Broadcast Sync</span>
+                 <span>Post Story</span>
                  <Sparkles className="w-4 h-4" />
                </>
              )}
@@ -350,27 +430,38 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 export const StatusScreen: React.FC = () => {
   const { stories, currentUser } = useGlobalState();
   const [showAddStory, setShowAddStory] = useState(false);
-  const [viewStories, setViewStories] = useState<Story[] | null>(null);
+  const [activeViewerId, setActiveViewerId] = useState<string | null>(null);
 
-  // Group stories by userId for combined viewing
-  const groupedStories = useMemo(() => {
-    return stories.reduce((acc, story) => {
-      if (!acc[story.userId]) acc[story.userId] = [];
-      acc[story.userId].push(story);
+  const storyGroups = useMemo(() => {
+    const grouped = stories.reduce((acc, story) => {
+      if (!acc[story.userId]) {
+        acc[story.userId] = {
+          userId: story.userId,
+          userName: story.userName,
+          userAvatar: story.userAvatar,
+          stories: []
+        };
+      }
+      acc[story.userId].stories.push(story);
       return acc;
-    }, {} as Record<string, Story[]>);
+    }, {} as Record<string, UserStoryGroup>);
+    
+    return Object.values(grouped);
   }, [stories]);
-
-  const userIds = useMemo(() => Object.keys(groupedStories), [groupedStories]);
 
   return (
     <div className="min-h-full bg-white dark:bg-slate-950 transition-colors pb-32">
       <AddStoryModal isOpen={showAddStory} onClose={() => setShowAddStory(false)} />
-      {viewStories && <StoryViewerModal stories={viewStories} onClose={() => setViewStories(null)} />}
+      {activeViewerId && (
+        <StoryViewerModal 
+          groups={storyGroups} 
+          initialGroupId={activeViewerId}
+          onClose={() => setActiveViewerId(null)} 
+        />
+      )}
       
       <div className="px-6 pt-6 pb-4">
         <div className="flex gap-5 overflow-x-auto pb-6 no-scrollbar -mx-2 px-2">
-          {/* My Status Trigger */}
           <div className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group" onClick={() => setShowAddStory(true)}>
              <div className="relative">
                 <div className="w-[4.5rem] h-[4.5rem] rounded-[2rem] p-0.5 border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center overflow-hidden">
@@ -380,21 +471,19 @@ export const StatusScreen: React.FC = () => {
                   <Plus className="w-4 h-4 text-white" strokeWidth={4} />
                 </div>
              </div>
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Sync</span>
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Add</span>
           </div>
 
-          {/* Grouped Horizontal Stories */}
-          {userIds.map((uid) => {
-            const userStories = groupedStories[uid];
-            const firstStory = userStories[0];
-            const allViewed = userStories.every(s => s.viewed);
+          {storyGroups.map((group) => {
+            const firstStory = group.stories[0];
+            const allViewed = group.stories.every(s => s.viewed);
             
             return (
-              <div key={uid} className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group" onClick={() => setViewStories(userStories)}>
+              <div key={group.userId} className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group" onClick={() => setActiveViewerId(group.userId)}>
                 <div className={`w-[4.5rem] h-[4.5rem] rounded-[2rem] p-1 ${allViewed ? 'bg-slate-200 dark:bg-slate-800' : 'bg-gradient-to-tr from-[#ff1744] to-red-400'}`}>
                   <div className="w-full h-full rounded-[1.8rem] overflow-hidden border-2 border-white dark:border-slate-950 bg-slate-100 dark:bg-slate-800">
                     {firstStory.type === 'image' ? (
-                       <img src={firstStory.content} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={firstStory.userName} />
+                       <img src={firstStory.content} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={group.userName} />
                     ) : (
                        <div className={`w-full h-full flex items-center justify-center p-2 text-center text-[6px] font-black text-white ${firstStory.background}`}>
                           {firstStory.content.substring(0, 15)}...
@@ -403,7 +492,7 @@ export const StatusScreen: React.FC = () => {
                   </div>
                 </div>
                 <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase truncate w-16 text-center">
-                  {uid === 'me' ? 'Me' : firstStory.userName.split(' ')[0]}
+                  {group.userId === 'me' ? 'Me' : group.userName.split(' ')[0]}
                 </span>
               </div>
             );
@@ -414,30 +503,29 @@ export const StatusScreen: React.FC = () => {
       <div className="px-6 space-y-8 mt-4">
          <div>
             <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-               <Radio className="w-3 h-3 text-[#ff1744]" /> Primary Sync
+               <Radio className="w-3 h-3 text-[#ff1744]" /> Friend Updates
             </h3>
-            {userIds.filter(uid => uid !== 'me').length === 0 ? (
+            {storyGroups.filter(g => g.userId !== 'me').length === 0 ? (
                <div className="bg-gray-50 dark:bg-slate-900 rounded-[2.5rem] p-12 text-center opacity-40 border border-dashed border-gray-200 dark:border-slate-800">
                   <CircleDashed className="w-10 h-10 mx-auto mb-4 animate-spin duration-[5s]" />
-                  <p className="text-[10px] font-black uppercase tracking-widest">Awaiting Neural Inputs</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest">No updates yet</p>
                </div>
             ) : (
                <div className="grid gap-4">
-                 {userIds.filter(uid => uid !== 'me').map(uid => {
-                   const userStories = groupedStories[uid];
-                   const firstStory = userStories[0];
-                   const allViewed = userStories.every(s => s.viewed);
+                 {storyGroups.filter(g => g.userId !== 'me').map(group => {
+                   const firstStory = group.stories[0];
+                   const allViewed = group.stories.every(s => s.viewed);
                    
                    return (
-                     <div key={uid + '_list'} onClick={() => setViewStories(userStories)} className="flex items-center gap-5 p-5 rounded-[2.25rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all group">
+                     <div key={group.userId + '_list'} onClick={() => setActiveViewerId(group.userId)} className="flex items-center gap-5 p-5 rounded-[2.25rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all group">
                          <div className="relative">
-                            <img src={firstStory.userAvatar} className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:scale-110 transition-transform" alt={firstStory.userName} />
+                            <img src={group.userAvatar} className="w-16 h-16 rounded-2xl object-cover shadow-md group-hover:scale-110 transition-transform" alt={group.userName} />
                             {!allViewed && <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ff1744] rounded-full border-2 border-white dark:border-slate-900 shadow-sm animate-pulse"></div>}
                          </div>
                          <div className="flex-1">
-                           <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-lg">{firstStory.userName}</h4>
+                           <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-lg">{group.userName}</h4>
                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{userStories.length} Updates • {firstStory.timestamp}</span>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{group.stories.length} updates • {firstStory.timestamp}</span>
                            </div>
                          </div>
                          <div className="w-10 h-10 bg-gray-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-300 group-hover:text-[#ff1744] transition-colors">
@@ -452,7 +540,7 @@ export const StatusScreen: React.FC = () => {
 
          <div>
             <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-               <Globe className="w-3 h-3" /> Public Broadcasts
+               <Globe className="w-3 h-3" /> Popular Stories
             </h3>
             <div className="grid grid-cols-2 gap-4">
                {[1, 2].map(i => (
@@ -462,9 +550,9 @@ export const StatusScreen: React.FC = () => {
                      <div className="absolute bottom-5 left-5 right-5">
                         <div className="flex items-center gap-2 mb-2">
                            <div className="w-6 h-6 rounded-lg bg-[#ff1744] flex items-center justify-center shadow-lg"><Zap className="w-3 h-3 text-white fill-white" /></div>
-                           <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Flash Stream</span>
+                           <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Story Channel</span>
                         </div>
-                        <p className="text-white font-black uppercase tracking-tighter text-sm line-clamp-2">Exploring Neo-Tokyo's Virtual Districts</p>
+                        <p className="text-white font-black uppercase tracking-tighter text-sm line-clamp-2">Exploring Tokyo's Virtual Districts</p>
                      </div>
                   </div>
                ))}
@@ -480,7 +568,7 @@ export const DiscoveryScreen: React.FC = () => {
     <div className="p-4 overflow-y-auto h-full pb-24 bg-gray-50 dark:bg-slate-950 transition-colors">
       <div className="relative mb-8">
         <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
-        <input type="text" placeholder="Explore PingSpace..." className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 shadow-sm" />
+        <input type="text" placeholder="Search PingSpace..." className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 shadow-sm" />
       </div>
       <div className="space-y-10">
         <div>
@@ -489,17 +577,17 @@ export const DiscoveryScreen: React.FC = () => {
               <button className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">See All</button>
            </div>
            <div className="flex flex-wrap gap-2">
-             {['#CryptoPing', '#AIArt', '#PingSpace', '#Web3Trade', '#DigitalNomad'].map(tag => (
+             {['#Crypto', '#AI', '#PingSpace', '#Web3', '#DigitalNomad'].map(tag => (
                <span key={tag} className="px-5 py-2.5 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">{tag}</span>
              ))}
            </div>
         </div>
         <div className="bg-gradient-to-br from-[#ff1744] to-orange-500 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-red-500/20">
            <Zap className="absolute right-[-10%] top-[-10%] w-48 h-48 opacity-10 rotate-12" />
-           <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-80">Flash Announcement</p>
+           <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-80">Announcement</p>
            <h3 className="text-2xl font-black mb-3">PingPlus Beta Access</h3>
-           <p className="text-sm text-white/80 mb-6 font-medium leading-relaxed">Early adopters get zero-fee trading for 12 months. Limited slots available for testers.</p>
-           <button className="bg-white text-[#ff1744] px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl">Secure Slot</button>
+           <p className="text-sm text-white/80 mb-6 font-medium leading-relaxed">Early users get zero-fee trading for 12 months. Limited slots available for testers.</p>
+           <button className="bg-white text-[#ff1744] px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl">Get Access</button>
         </div>
       </div>
     </div>
@@ -554,11 +642,11 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
           
           <div className="flex items-center gap-4 mb-8">
              <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center text-indigo-500">
-                <Rocket className="w-6 h-6" />
+                <Plus className="w-6 h-6" />
              </div>
              <div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Launch Space</h3>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Protocol Initialize</p>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">New Space</h3>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Create a community</p>
              </div>
           </div>
 
@@ -573,7 +661,7 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
              ) : (
                <>
                  <Camera className="w-10 h-10 text-slate-300 group-hover:text-[#ff1744] transition-colors mb-2" />
-                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Add Neural Visual</span>
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Upload Cover Image</span>
                </>
              )}
              <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -582,13 +670,13 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
           <div className="space-y-5">
             <div className="space-y-1.5">
-               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Identity Name</label>
+               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Space Name</label>
                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Neo Tokyo Explorers" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" />
             </div>
 
             <div className="space-y-1.5">
-               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Mission Parameters</label>
-               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the collective purpose..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-medium resize-none h-24 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm" />
+               <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.25em] ml-2">Description</label>
+               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this space about?" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-medium resize-none h-24 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm" />
             </div>
           </div>
 
@@ -599,8 +687,8 @@ const AddSpaceModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
           >
              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                <>
-                 <span>Initiate Launch</span>
-                 <Rocket className="w-4 h-4" />
+                 <span>Create Space</span>
+                 <Check className="w-4 h-4" />
                </>
              )}
           </button>
@@ -639,7 +727,7 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
         <div className="flex items-center justify-between">
            <div>
               <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Spaces</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Neural Collective Network</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Join global communities</p>
            </div>
            <button onClick={() => setShowAddSpace(true)} className="p-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-[1.75rem] shadow-xl hover:scale-110 active:scale-95 transition-all">
               <Plus className="w-6 h-6" strokeWidth={3} />
@@ -652,7 +740,7 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Query the collective..." 
+              placeholder="Search spaces..." 
               className="w-full bg-slate-50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] py-4 pl-12 pr-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
            />
         </div>
@@ -685,7 +773,7 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
                    <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#ff1744] rounded-xl flex items-center gap-2">
                       <Flame className="w-3 h-3 text-white fill-white" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white">Trending Hub</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white">Trending</span>
                    </div>
                 </div>
                 <div className="p-6">
@@ -705,7 +793,7 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
                           : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl'
                       }`}
                    >
-                      {heroSpace.joined ? 'Active Participant' : 'Initiate Connection'}
+                      {heroSpace.joined ? 'Member' : 'Join Community'}
                    </button>
                 </div>
              </div>
@@ -714,14 +802,14 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
 
         <div className="space-y-4">
            <div className="flex items-center justify-between px-1">
-              <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Network Nodes</h3>
-              <span className="text-[10px] font-black text-slate-300">{filteredSpaces.length} Available</span>
+              <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">All Communities</h3>
+              <span className="text-[10px] font-black text-slate-300">{filteredSpaces.length} Results</span>
            </div>
            
            {filteredSpaces.length === 0 ? (
               <div className="py-20 text-center opacity-30">
                  <CircleDashed className="w-12 h-12 mx-auto mb-4 animate-spin duration-[3s]" />
-                 <p className="text-xs font-black uppercase tracking-widest">No active sectors found</p>
+                 <p className="text-xs font-black uppercase tracking-widest">No spaces found</p>
               </div>
            ) : (
               <div className="grid gap-5">
@@ -757,7 +845,7 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
                                       : 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20'
                                 }`}
                              >
-                                {space.joined ? 'Member' : 'Join'}
+                                {space.joined ? 'Joined' : 'Join'}
                              </button>
                           </div>
                        </div>
@@ -771,14 +859,13 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
   );
 };
 
-// --- MARKETPLACE COMPONENTS ---
-
+// Marketplace terminology
 const ProductDetailModal: React.FC<{ product: Product | null; onClose: () => void; onAddToCart: (p: Product) => void }> = ({ product, onClose, onAddToCart }) => {
   if (!product) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-       <div className="bg-white dark:bg-slate-900 rounded-t-[3rem] sm:rounded-[3rem] w-full max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col relative shadow-2xl animate-in slide-in-from-bottom-10">
+       <div className="bg-white dark:bg-slate-900 rounded-t-[3rem] sm:rounded-[3rem] w-full max-lg h-[90vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col relative shadow-2xl animate-in slide-in-from-bottom-10">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white z-10 transition-all active:scale-90"><X className="w-6 h-6" /></button>
           
           <div className="w-full aspect-square relative shrink-0">
@@ -805,9 +892,9 @@ const ProductDetailModal: React.FC<{ product: Product | null; onClose: () => voi
 
              <div className="space-y-6">
                 <div>
-                   <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Intelligence Report</h3>
+                   <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Product Info</h3>
                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium">
-                      {product.description || "No neural description provided for this asset."}
+                      {product.description || "No description provided for this item."}
                    </p>
                 </div>
 
@@ -815,15 +902,15 @@ const ProductDetailModal: React.FC<{ product: Product | null; onClose: () => voi
                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center gap-3">
                       <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 shadow-sm"><UserIcon className="w-5 h-5" /></div>
                       <div>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Entity</p>
+                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Seller</p>
                         <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{product.seller}</p>
                       </div>
                    </div>
                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center gap-3">
                       <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 shadow-sm"><MapPinIcon className="w-5 h-5" /></div>
                       <div>
-                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Sector</p>
-                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{product.location || 'Global'}</p>
+                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Location</p>
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate">{product.location || 'Worldwide'}</p>
                       </div>
                    </div>
                 </div>
@@ -837,7 +924,7 @@ const ProductDetailModal: React.FC<{ product: Product | null; onClose: () => voi
                 className="flex-1 h-16 bg-[#ff1744] text-white font-black rounded-[2rem] shadow-xl shadow-red-500/30 flex items-center justify-center gap-3 uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
              >
                 <ShoppingBag className="w-5 h-5" />
-                Capture Asset
+                Add to Cart
              </button>
           </div>
        </div>
@@ -857,7 +944,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
     setCheckingOut(true);
     setTimeout(() => {
       dispatch({ type: 'CLEAR_CART' });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Transmission Successful! Assets dispatched.' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Order placed successfully!' } });
       setCheckingOut(false);
       onClose();
     }, 2000);
@@ -869,7 +956,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl animate-in fade-in p-4">
        <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-sm h-[80vh] flex flex-col relative shadow-2xl border border-white/20 dark:border-slate-800 animate-in zoom-in-95">
           <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
-             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Supply Hub</h3>
+             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Shopping Cart</h3>
              <button onClick={onClose} className="p-2 bg-gray-50 dark:bg-slate-800 rounded-full"><X className="w-5 h-5 text-slate-400" /></button>
           </div>
 
@@ -879,7 +966,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
                    <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-[2.5rem] flex items-center justify-center mb-6">
                       <ShoppingBag className="w-10 h-10 text-slate-400" />
                    </div>
-                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">Grid empty</p>
+                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cart is empty</p>
                 </div>
              ) : (
                 <div className="space-y-4">
@@ -901,7 +988,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
 
           <div className="p-8 bg-gray-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-800 rounded-b-[3rem] space-y-6">
              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Aggregate Total</span>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Grand Total</span>
                 <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">${total.toFixed(2)}</span>
              </div>
              <button 
@@ -911,7 +998,7 @@ const CartModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen,
              >
                 {checkingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>
-                    <span>Confirm Order</span>
+                    <span>Checkout</span>
                     <MoveRight className="w-4 h-4" />
                   </>
                 )}
@@ -948,7 +1035,7 @@ export const MarketplaceScreen: React.FC = () => {
          onClose={() => setSelectedProduct(null)} 
          onAddToCart={(p) => {
             dispatch({ type: 'ADD_TO_CART', payload: p });
-            dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Asset added to hub' } });
+            dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Item added to cart' } });
          }}
       />
 
@@ -960,7 +1047,7 @@ export const MarketplaceScreen: React.FC = () => {
               </div>
               <div>
                  <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">Market</h2>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Asset Exchange Protocol</p>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Buy & Sell Items</p>
               </div>
            </div>
            <div className="flex items-center gap-3">
@@ -987,7 +1074,7 @@ export const MarketplaceScreen: React.FC = () => {
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search assets..." 
+              placeholder="Search items..." 
               className="w-full bg-slate-50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#ff1744]/10 transition-all shadow-sm" 
            />
         </div>
@@ -1013,7 +1100,7 @@ export const MarketplaceScreen: React.FC = () => {
         {filteredProducts.length === 0 ? (
            <div className="h-64 flex flex-col items-center justify-center text-center opacity-30 animate-in fade-in">
               <Package className="w-12 h-12 mb-4" />
-              <p className="text-xs font-black uppercase tracking-widest">No assets found in this sector</p>
+              <p className="text-xs font-black uppercase tracking-widest">No items found</p>
            </div>
         ) : (
            <div className="grid grid-cols-2 gap-4 pb-20">
@@ -1028,15 +1115,10 @@ export const MarketplaceScreen: React.FC = () => {
                      <div className="absolute top-4 right-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
                         <button className="p-2.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur rounded-2xl shadow-xl text-[#ff1744] hover:scale-110 active:scale-90 transition-all"><Heart className="w-4 h-4 fill-current" /></button>
                      </div>
-                     {product.condition && (
-                        <div className="absolute bottom-4 left-4 px-2.5 py-1 bg-black/60 backdrop-blur-md text-[7px] font-black text-white rounded-lg uppercase tracking-[0.2em]">
-                           {product.condition}
-                        </div>
-                     )}
                    </div>
                    <div className="p-5">
                      <div className="flex items-center justify-between mb-1.5 min-h-[16px]">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 truncate w-24">{product.category || 'ASSET'}</span>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 truncate w-24">{product.category || 'ITEM'}</span>
                         <div className="flex items-center gap-0.5 text-amber-400">
                            <Star className="w-2.5 h-2.5 fill-current" />
                            <span className="text-[8px] font-black text-slate-700 dark:text-slate-300">{product.rating}</span>
@@ -1049,7 +1131,7 @@ export const MarketplaceScreen: React.FC = () => {
                           onClick={(e) => {
                              e.stopPropagation();
                              dispatch({ type: 'ADD_TO_CART', payload: product });
-                             dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Asset captured' } });
+                             dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart' } });
                           }}
                           className="p-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:bg-[#ff1744] hover:dark:bg-[#ff1744] hover:dark:text-white transition-all shadow-md active:scale-90"
                        >
@@ -1066,10 +1148,11 @@ export const MarketplaceScreen: React.FC = () => {
   );
 };
 
-type ProfileView = 'main' | 'privacy' | 'notifications' | 'accessibility' | 'language' | 'help' | 'wallet' | 'devices';
+// Fix: Define ProfileView type to fix missing name error in ProfileScreen state initialization
+type ProfileView = 'main' | 'wallet' | 'privacy' | 'notifications' | 'accessibility' | 'language' | 'help' | 'devices' | 'calls';
 
 export const ProfileScreen: React.FC = () => {
-  const { currentUser, theme, settings, transactions } = useGlobalState();
+  const { currentUser, theme, settings, transactions, callHistory } = useGlobalState();
   const dispatch = useGlobalDispatch();
   
   const [activeView, setActiveView] = useState<ProfileView>('main');
@@ -1090,12 +1173,6 @@ export const ProfileScreen: React.FC = () => {
     }
   }, [currentUser, isEditing]);
 
-  useEffect(() => {
-    if (activeView === 'language') {
-      setTempLang(settings.language);
-    }
-  }, [activeView, settings.language]);
-
   const handleAvatarClick = () => avatarInputRef.current?.click();
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1106,7 +1183,7 @@ export const ProfileScreen: React.FC = () => {
         const publicUrl = await storageService.uploadFile(file);
         const updatedUser = await api.auth.updateProfile({ avatar: publicUrl });
         dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Profile updated!' } });
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Avatar updated!' } });
       } catch (err: any) {
         dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Upload failed' } });
       } finally {
@@ -1122,9 +1199,9 @@ export const ProfileScreen: React.FC = () => {
       const updatedUser = await api.auth.updateProfile({ name: editName, status: editStatus, bio: editBio });
       dispatch({ type: 'UPDATE_USER', payload: updatedUser });
       setIsEditing(false);
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Profile saved!' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Profile updated!' } });
     } catch (err: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Failed to save' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Save failed' } });
     } finally {
       setSaving(false);
     }
@@ -1132,17 +1209,17 @@ export const ProfileScreen: React.FC = () => {
 
   const handleSaveLanguage = () => {
     dispatch({ type: 'UPDATE_SETTING', payload: { section: 'language' as any, key: '', value: tempLang } });
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Semantic protocol updated: ' + tempLang } });
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Language set to: ' + tempLang } });
     setActiveView('main');
   };
 
   const handleLogout = async () => {
     dispatch({ type: 'LOGOUT' });
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Disconnecting session...' } });
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Logging out...' } });
     try {
-      api.auth.logout().catch(err => console.error("Server signout ignored as local state cleared", err));
+      api.auth.logout();
     } catch (err: any) {
-      console.warn("Sign out request error", err);
+      console.warn("Sign out error", err);
     }
   };
 
@@ -1150,11 +1227,66 @@ export const ProfileScreen: React.FC = () => {
     dispatch({ type: 'UPDATE_SETTING', payload: { section, key, value } });
   };
 
-  // --- SUB-VIEWS ---
+  const formatCallDuration = (secs: number) => {
+    if (secs === 0) return 'Missed';
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m > 0 ? `${m}m ` : ''}${s}s`;
+  };
+
+  const renderCalls = () => (
+    <div className="animate-in slide-in-from-right duration-300">
+      <SettingSubHeader title="Call History" onBack={() => setActiveView('main')} />
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-2">
+           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Recent Calls</h3>
+           <History className="w-4 h-4 text-slate-300" />
+        </div>
+        
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+          {callHistory.length === 0 ? (
+            <div className="p-16 text-center opacity-30 flex flex-col items-center">
+               <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-[2rem] flex items-center justify-center mb-6">
+                  <Phone className="w-8 h-8 text-slate-300" />
+               </div>
+               <p className="text-[10px] font-black uppercase tracking-widest">No calls yet</p>
+            </div>
+          ) : (
+            callHistory.map(call => (
+              <div key={call.id} className="flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border-b border-gray-50 dark:border-slate-800 last:border-0 group">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <img src={call.participant.avatar} className="w-12 h-12 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" alt={call.participant.name} />
+                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-lg border-2 border-white dark:border-slate-950 flex items-center justify-center ${call.mediaType === 'video' ? 'bg-purple-500' : 'bg-[#ff1744]'}`}>
+                      {call.mediaType === 'video' ? <Video className="w-2.5 h-2.5 text-white" /> : <Phone className="w-2.5 h-2.5 text-white" />}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-black uppercase text-xs tracking-tight text-slate-800 dark:text-white">{call.participant.name}</h4>
+                    <div className="flex items-center gap-1.5">
+                       {call.type === 'missed' ? <PhoneMissed className="w-3 h-3 text-[#ff1744] animate-pulse" /> : 
+                        call.type === 'incoming' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : 
+                        <ArrowUpRight className="w-3 h-3 text-[#ff1744]" />}
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                          {call.type === 'missed' ? 'Missed Call' : `${call.type} • ${formatCallDuration(call.duration)}`}
+                       </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{call.timestamp.split(',')[0]}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   const renderDevices = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Linked Grid" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Devices" onBack={() => setActiveView('main')} />
       <div className="space-y-6">
         <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
            <div className="p-6 border-b border-gray-50 dark:border-slate-800 flex items-center justify-between">
@@ -1163,8 +1295,8 @@ export const ProfileScreen: React.FC = () => {
                     <Smartphone className="w-6 h-6" />
                  </div>
                  <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">This Device</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">iPhone 15 Pro • Active</p>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Current Phone</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">iPhone • Active Now</p>
                  </div>
               </div>
               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
@@ -1176,79 +1308,59 @@ export const ProfileScreen: React.FC = () => {
                     <Monitor className="w-6 h-6" />
                  </div>
                  <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Citadel Desktop</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">MacOS • Last synced 2h ago</p>
-                 </div>
-              </div>
-              <button className="p-2 text-slate-300 hover:text-red-500 transition-colors"><XCircle className="w-5 h-5" /></button>
-           </div>
-
-           <div className="p-6 flex items-center justify-between group">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
-                    <Laptop className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Work Terminal</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Linux • Last synced 1d ago</p>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">Desktop Computer</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Last active 2h ago</p>
                  </div>
               </div>
               <button className="p-2 text-slate-300 hover:text-red-500 transition-colors"><XCircle className="w-5 h-5" /></button>
            </div>
         </div>
-
         <button className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
            <QrCode className="w-5 h-5" />
-           Link Neural Node
+           Link New Device
         </button>
-
-        <div className="p-6 bg-amber-50 dark:bg-amber-900/10 rounded-[2rem] border border-amber-100 dark:border-amber-900/20 flex gap-4">
-           <ShieldAlert className="w-6 h-6 text-amber-500 shrink-0" />
-           <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase leading-relaxed tracking-tight">Managing linked devices ensures your identity remains secure. Log out of unknown nodes immediately.</p>
-        </div>
       </div>
     </div>
   );
 
   const renderWallet = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Wealth Terminal" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="My Wallet" onBack={() => setActiveView('main')} />
       
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl mb-8 border border-white/5">
         <Sparkles className="absolute right-[-5%] top-[-5%] w-32 h-32 opacity-10 rotate-12 text-amber-400" />
         <div className="relative z-10">
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-2 opacity-60">Aggregate Assets</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-2 opacity-60">Total Balance</p>
           <h3 className="text-4xl font-black mb-1">$24,580.00</h3>
           <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-            <TrendingUp className="w-3 h-3" /> +12.4% Neural Growth
+            <TrendingUp className="w-3 h-3" /> +12.4% Increase
           </p>
         </div>
-        
         <div className="mt-8 grid grid-cols-3 gap-4 relative z-10">
            <button className="flex flex-col items-center gap-2 group">
               <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-[#ff1744] transition-all">
                 <ArrowUpRight className="w-6 h-6" />
               </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Dispatch</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">Send</span>
            </button>
            <button className="flex flex-col items-center gap-2 group">
               <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-emerald-500 transition-all">
                 <ArrowDownLeft className="w-6 h-6" />
               </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Acquire</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">Request</span>
            </button>
            <button className="flex flex-col items-center gap-2 group">
               <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:bg-blue-500 transition-all">
                 <Plus className="w-6 h-6" />
               </div>
-              <span className="text-[9px] font-black uppercase tracking-widest">Inject</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">Top Up</span>
            </button>
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center px-2">
-           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Ledger Logs</h3>
+           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">Transaction History</h3>
            <History className="w-4 h-4 text-slate-300" />
         </div>
         
@@ -1256,7 +1368,7 @@ export const ProfileScreen: React.FC = () => {
           {transactions.length === 0 ? (
             <div className="p-10 text-center opacity-30">
                <Landmark className="w-10 h-10 mx-auto mb-2" />
-               <p className="text-[10px] font-black uppercase">No recent activity</p>
+               <p className="text-[10px] font-black uppercase">No activity</p>
             </div>
           ) : (
             transactions.map(tx => (
@@ -1274,7 +1386,6 @@ export const ProfileScreen: React.FC = () => {
                   <p className={`font-black text-xs ${tx.type === 'received' || tx.type === 'deposit' ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-200'}`}>
                     {tx.type === 'received' || tx.type === 'deposit' ? '+' : '-'}${tx.amount.toFixed(2)}
                   </p>
-                  <p className="text-[9px] font-black uppercase opacity-40">Settled</p>
                 </div>
               </div>
             ))
@@ -1286,59 +1397,51 @@ export const ProfileScreen: React.FC = () => {
   
   const renderPrivacy = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Privacy Grid" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Privacy" onBack={() => setActiveView('main')} />
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        <SettingRow icon={Eye} title="Last Seen" subtitle="Control visibility of activity" value={settings.privacy.lastSeen} onClick={() => {}} />
-        <SettingRow icon={UserIcon} title="Profile Photo" subtitle="Who can see your avatar" value={settings.privacy.profilePhoto} onClick={() => {}} />
+        <SettingRow icon={Eye} title="Last Seen" subtitle="Control who can see your status" value={settings.privacy.lastSeen} onClick={() => {}} />
+        <SettingRow icon={UserIcon} title="Profile Photo" subtitle="Control who can see your photo" value={settings.privacy.profilePhoto} onClick={() => {}} />
         <SettingRow 
           icon={CheckCircle2} 
           title="Read Receipts" 
-          subtitle="Allow others to see when you've read" 
+          subtitle="Allow others to see when you read" 
           isToggle 
           value={settings.privacy.readReceipts} 
           onClick={() => updateSetting('privacy', 'readReceipts', !settings.privacy.readReceipts)}
         />
-        <SettingRow icon={SecurityIcon} title="Biometric Unlock" subtitle="Secure access with facial/touch ID" isToggle value={true} onClick={() => {}} />
-        <SettingRow icon={ShieldCheck} title="Blocked Grid" subtitle="Managed filtered entities" onClick={() => {}} />
+        <SettingRow icon={SecurityIcon} title="Biometric Security" subtitle="FaceID or Fingerprint unlock" isToggle value={true} onClick={() => {}} />
+        <SettingRow icon={ShieldCheck} title="Blocked Contacts" subtitle="Manage blocked users" onClick={() => {}} />
       </div>
     </div>
   );
 
   const renderNotifications = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Transmissions" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Notifications" onBack={() => setActiveView('main')} />
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
         <SettingRow 
           icon={Bell} 
-          title="Push Alerts" 
-          subtitle="Real-time sensory feedback" 
+          title="Push Notifications" 
+          subtitle="Alerts for new messages" 
           isToggle 
           value={settings.notifications.push} 
           onClick={() => updateSetting('notifications', 'push', !settings.notifications.push)}
         />
         <SettingRow 
           icon={Mail} 
-          title="Email Sync" 
-          subtitle="Backup notification layer" 
+          title="Email Notifications" 
+          subtitle="Get updates via email" 
           isToggle 
           value={settings.notifications.email} 
           onClick={() => updateSetting('notifications', 'email', !settings.notifications.email)}
         />
         <SettingRow 
           icon={Landmark} 
-          title="Financial Ops" 
-          subtitle="Transaction specific alerts" 
+          title="Wallet Alerts" 
+          subtitle="Get notified of transactions" 
           isToggle 
           value={settings.notifications.transactions} 
           onClick={() => updateSetting('notifications', 'transactions', !settings.notifications.transactions)}
-        />
-        <SettingRow 
-          icon={CircleDashed} 
-          title="Status Updates" 
-          subtitle="Notify for neural thought streams" 
-          isToggle 
-          value={true} 
-          onClick={() => {}} 
         />
       </div>
     </div>
@@ -1346,13 +1449,13 @@ export const ProfileScreen: React.FC = () => {
 
   const renderAccessibility = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Neural Interface" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Accessibility" onBack={() => setActiveView('main')} />
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-        <SettingRow icon={Maximize2} title="Text Scale" subtitle="Adjust typography density" value="Default" onClick={() => {}} />
+        <SettingRow icon={Maximize2} title="Text Size" subtitle="Adjust the app text size" value="Normal" onClick={() => {}} />
         <SettingRow 
           icon={Sparkles} 
           title="Reduced Motion" 
-          subtitle="Minimize kinetic transitions" 
+          subtitle="Turn off UI animations" 
           isToggle 
           value={false} 
           onClick={() => {}} 
@@ -1360,7 +1463,7 @@ export const ProfileScreen: React.FC = () => {
         <SettingRow 
           icon={Box} 
           title="High Contrast" 
-          subtitle="Maximize visual distinction" 
+          subtitle="Increase color contrast" 
           isToggle 
           value={false} 
           onClick={() => {}} 
@@ -1371,10 +1474,10 @@ export const ProfileScreen: React.FC = () => {
 
   const renderLanguage = () => (
     <div className="animate-in slide-in-from-right duration-300 flex flex-col h-full">
-      <SettingSubHeader title="Linguistic Grid" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Language" onBack={() => setActiveView('main')} />
       <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
         <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          {['UK English', 'Spanish', 'Arabic', 'US English', 'French', 'German'].map((lang) => (
+          {['English (UK)', 'Spanish', 'Arabic', 'English (US)', 'French', 'German'].map((lang) => (
             <button 
               key={lang} 
               onClick={() => setTempLang(lang)}
@@ -1386,20 +1489,18 @@ export const ProfileScreen: React.FC = () => {
                   </div>
                   <span className={`text-xs font-black uppercase tracking-widest ${tempLang === lang ? 'text-[#ff1744]' : 'text-slate-500'}`}>{lang}</span>
                </div>
-               {tempLang === lang && <span className="text-[10px] font-black text-[#ff1744] uppercase tracking-widest">Selected</span>}
             </button>
           ))}
         </div>
       </div>
-      
       <div className="fixed bottom-32 left-4 right-4 z-20">
          <button 
             onClick={handleSaveLanguage}
             disabled={tempLang === settings.language}
-            className={`w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-2xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:grayscale disabled:scale-100`}
+            className={`w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-2xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:grayscale`}
          >
             <Save className="w-5 h-5" />
-            Save Configuration
+            Save Changes
          </button>
       </div>
     </div>
@@ -1407,15 +1508,14 @@ export const ProfileScreen: React.FC = () => {
 
   const renderHelp = () => (
     <div className="animate-in slide-in-from-right duration-300">
-      <SettingSubHeader title="Support Hub" onBack={() => setActiveView('main')} />
+      <SettingSubHeader title="Help & Support" onBack={() => setActiveView('main')} />
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm mb-6">
-        <SettingRow icon={BookOpen} title="Knowledge Grid" subtitle="View technical documentation" onClick={() => {}} />
-        <SettingRow icon={MessageSquareHeart} title="Direct Support" subtitle="Open sync channel with human" onClick={() => {}} />
-        <SettingRow icon={Bug} title="Report Anomaly" subtitle="Submit bug telemetry" color="text-amber-500" onClick={() => {}} />
+        <SettingRow icon={BookOpen} title="Help Center" subtitle="Browse our help guides" onClick={() => {}} />
+        <SettingRow icon={MessageSquareHeart} title="Contact Us" subtitle="Talk to a support agent" onClick={() => {}} />
+        <SettingRow icon={Bug} title="Report a Problem" subtitle="Let us know about bugs" color="text-amber-500" onClick={() => {}} />
       </div>
       <div className="bg-slate-100 dark:bg-slate-900 rounded-[2rem] p-6 text-center">
-         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">PingSpace Engine v4.2.0</p>
-         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Developed by CyberCore Systems</p>
+         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">PingSpace v4.2.0</p>
       </div>
     </div>
   );
@@ -1423,7 +1523,6 @@ export const ProfileScreen: React.FC = () => {
   const renderMain = () => (
     <div className="animate-in fade-in duration-500 pb-12">
       <input type="file" ref={avatarInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
-      
       <div className="flex flex-col items-center py-10 relative">
         <button 
           onClick={() => setActiveView('wallet')}
@@ -1431,7 +1530,6 @@ export const ProfileScreen: React.FC = () => {
         >
           <WalletIcon className="w-5 h-5" />
         </button>
-
         <div className="relative mb-6 group">
            <div onClick={handleAvatarClick} className={`w-32 h-32 rounded-[2.5rem] p-1.5 bg-gradient-to-tr from-[#ff1744] to-orange-400 shadow-2xl cursor-pointer transition-transform hover:scale-105 relative overflow-hidden`}>
               <img src={currentUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.name || 'U')}&background=ff1744&color=fff`} className={`w-full h-full rounded-[2.2rem] border-4 border-white dark:border-slate-950 object-cover ${uploadingAvatar ? 'opacity-30' : ''}`} alt="Profile" />
@@ -1442,32 +1540,33 @@ export const ProfileScreen: React.FC = () => {
         </div>
         {isEditing ? (
           <div className="w-full max-sm space-y-6">
-            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Display Name" className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 font-bold text-slate-900 dark:text-white" />
-            <input type="text" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} placeholder="Status Phrase" className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 text-slate-700 dark:text-slate-300" />
-            <button onClick={handleSaveProfile} disabled={saving} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-red-500/30">{saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Apply Identity'}</button>
+            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Your Name" className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 font-bold text-slate-900 dark:text-white" />
+            <input type="text" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} placeholder="Update Status" className="w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-4 text-slate-700 dark:text-slate-300" />
+            <button onClick={handleSaveProfile} disabled={saving} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-red-500/30">{saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Save Profile'}</button>
           </div>
         ) : (
           <div className="text-center">
             <div className="flex items-center justify-center gap-3"><h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{currentUser?.name}</h2><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-[#ff1744]"><Edit3 className="w-4 h-4" /></button></div>
-            <p className="text-xs text-[#ff1744] font-black uppercase tracking-[0.25em] mt-2 mb-4">{currentUser?.status || 'Elite Contributor'}</p>
+            <p className="text-xs text-[#ff1744] font-black uppercase tracking-[0.25em] mt-2 mb-4">{currentUser?.status || 'Available'}</p>
           </div>
         )}
       </div>
 
       <div className="space-y-8">
         <div className="space-y-4">
-           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] ml-2">Control Terminal</h3>
+           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] ml-2">Settings</h3>
            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
-              <SettingRow icon={Lock} title="Privacy Grid" subtitle="Identity & visibility masks" onClick={() => setActiveView('privacy')} />
-              <SettingRow icon={Bell} title="Transmissions" subtitle="Notification sensory alerts" onClick={() => setActiveView('notifications')} />
-              <SettingRow icon={MonitorSmartphone} title="Linked Nodes" subtitle="Manage active hardware sessions" onClick={() => setActiveView('devices')} />
-              <SettingRow icon={Accessibility} title="Neural Interface" subtitle="Accessibility & UX modifiers" onClick={() => setActiveView('accessibility')} />
-              <SettingRow icon={Languages} title="Linguistic Grid" subtitle="Regional semantic translation" onClick={() => setActiveView('language')} />
-              <SettingRow icon={HelpCircle} title="Support Hub" subtitle="Help Center & diagnostics" onClick={() => setActiveView('help')} />
+              <SettingRow icon={History} title="Call History" subtitle="View your recent calls" onClick={() => setActiveView('calls')} />
+              <SettingRow icon={Lock} title="Privacy" subtitle="Manage your privacy settings" onClick={() => setActiveView('privacy')} />
+              <SettingRow icon={Bell} title="Notifications" subtitle="Choose what you hear about" onClick={() => setActiveView('notifications')} />
+              <SettingRow icon={MonitorSmartphone} title="Linked Devices" subtitle="Manage your active sessions" onClick={() => setActiveView('devices')} />
+              <SettingRow icon={Accessibility} title="Appearance" subtitle="Customize the look and feel" onClick={() => setActiveView('accessibility')} />
+              <SettingRow icon={Languages} title="Language" subtitle="Select your preferred language" onClick={() => setActiveView('language')} />
+              <SettingRow icon={HelpCircle} title="Help" subtitle="Get support and view guides" onClick={() => setActiveView('help')} />
               <SettingRow 
                 icon={LogOut} 
-                title="Sign Out" 
-                subtitle="Disconnect active session" 
+                title="Log Out" 
+                subtitle="Sign out of your account" 
                 isDanger 
                 onClick={handleLogout} 
               />
@@ -1477,8 +1576,8 @@ export const ProfileScreen: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
            <SettingRow 
              icon={theme === 'light' ? Sun : Moon} 
-             title="Visual Spectrum" 
-             subtitle={theme === 'light' ? 'Light mode calibrated' : 'Dark mode active'} 
+             title="Dark Mode" 
+             subtitle={theme === 'light' ? 'Light mode is on' : 'Dark mode is on'} 
              isToggle 
              value={theme === 'dark'} 
              onClick={() => dispatch({ type: 'SET_THEME', payload: theme === 'light' ? 'dark' : 'light' })}
@@ -1499,14 +1598,10 @@ export const ProfileScreen: React.FC = () => {
       {activeView === 'language' && renderLanguage()}
       {activeView === 'help' && renderHelp()}
       {activeView === 'devices' && renderDevices()}
+      {activeView === 'calls' && renderCalls()}
     </div>
   );
 };
-
-// --- Other screens ---
-const Maximize2Icon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-);
 
 const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const dispatch = useGlobalDispatch();
@@ -1598,7 +1693,7 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
              <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-2xl text-[#ff1744]">
                 <Package className="w-6 h-6" />
              </div>
-             <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Sell Item</h3>
+             <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Sell an Item</h3>
           </div>
 
           <div onClick={() => !uploading && fileInputRef.current?.click()} className="aspect-video bg-gray-50 dark:bg-slate-950 rounded-3xl mb-6 overflow-hidden relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 group cursor-pointer transition-colors hover:border-[#ff1744]/50">
@@ -1612,7 +1707,7 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
              ) : (
                <>
                  <Camera className="w-8 h-8 text-[#ff1744] mb-2" />
-                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Add Product Image</span>
+                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Add Product Photo</span>
                </>
              )}
              <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -1622,9 +1717,8 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
           <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 no-scrollbar">
             <div className="space-y-1.5">
                <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Product Title</label>
-               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What are you selling?" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
+               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name of item" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Price ($)</label>
@@ -1643,7 +1737,6 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                   </div>
                </div>
             </div>
-
             <div className="space-y-2">
                <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Condition</label>
                <div className="flex flex-wrap gap-2">
@@ -1654,30 +1747,23 @@ const SellProductModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                   ))}
                </div>
             </div>
-
             <div className="space-y-1.5">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Detailed Description</label>
-               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item, features, and why it's a great deal..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-2 resize-none h-28 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all text-sm leading-relaxed" />
+               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Description</label>
+               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Write details about the item..." className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white mb-2 resize-none h-28 focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all text-sm leading-relaxed" />
             </div>
-
             <div className="space-y-1.5">
-               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Sync Location</label>
+               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-2">Location</label>
                <div className="relative">
                   <LocationIcon className="absolute left-4 top-4 w-4 h-4 text-slate-400" />
                   <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, Country" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-10 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
                </div>
             </div>
           </div>
-
-          <div className="mt-8 space-y-4">
-             <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
-                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Secure listing authenticated</p>
-             </div>
-             <button onClick={handleList} disabled={!title || !price || !image || loading || uploading} className="w-full py-5 bg-[#ff1744] text-white font-black rounded-3xl shadow-xl shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3 group">
+          <div className="mt-8">
+             <button onClick={handleList} disabled={!title || !price || !image || loading || uploading} className="w-full py-4 bg-[#ff1744] text-white font-bold rounded-3xl shadow-xl shadow-red-500/30 hover:bg-red-600 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 group">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>
-                    <span>Publish Listing</span>
+                    <span>Post Item</span>
                     <ArrowRightLeft className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}

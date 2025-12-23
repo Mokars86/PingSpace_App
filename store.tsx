@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story } from './types';
+import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story, CallLog } from './types';
 
 // --- INITIAL STATE ---
 const savedTheme = localStorage.getItem('pingspace_theme') as 'light' | 'dark' || 'light';
@@ -18,6 +18,7 @@ const initialState: GlobalState = {
   cart: [],
   notifications: [],
   transactions: [],
+  callHistory: [],
   spaces: [],
   products: [],
   stories: [], 
@@ -105,7 +106,8 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         products: action.payload.products,
         spaces: action.payload.spaces,
         transactions: action.payload.transactions,
-        stories: action.payload.stories
+        stories: action.payload.stories,
+        callHistory: action.payload.callHistory || state.callHistory
       };
 
     case 'ADD_NOTIFICATION':
@@ -190,6 +192,18 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
       return {
         ...state,
         transactions: [action.payload, ...state.transactions]
+      };
+
+    case 'ADD_CALL_LOG':
+      return {
+        ...state,
+        callHistory: [action.payload, ...state.callHistory]
+      };
+
+    case 'SET_CALL_HISTORY':
+      return {
+        ...state,
+        callHistory: action.payload
       };
     
     case 'ADD_PRODUCT':

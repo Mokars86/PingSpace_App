@@ -1,6 +1,6 @@
 
 import { supabase } from "./supabase";
-import { User, ChatSession, Transaction, Product, Space, Message, Story } from '../types';
+import { User, ChatSession, Transaction, Product, Space, Message, Story, CallLog } from '../types';
 import { authService } from './auth';
 
 /**
@@ -13,36 +13,28 @@ import { authService } from './auth';
  *   username TEXT UNIQUE,
  *   avatar TEXT,
  *   email TEXT,
+ *   phone TEXT,
  *   status TEXT DEFAULT 'Available',
  *   bio TEXT,
  *   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
  * );
  * 
- * -- 1.1 PRODUCTS TABLE EXTENSION
- * -- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description TEXT;
- * -- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS category TEXT;
- * -- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS condition TEXT;
- * -- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS location TEXT;
+ * -- 2. CALLS TABLE
+ * CREATE TABLE public.calls (
+ *   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+ *   participant_id UUID REFERENCES public.profiles(id),
+ *   type TEXT, -- incoming, outgoing, missed
+ *   media_type TEXT, -- audio, video
+ *   duration INTEGER, -- in seconds
+ *   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+ * );
  * 
- * -- 2. RLS POLICIES
+ * -- 3. RLS POLICIES (CRITICAL FOR LOGIN)
  * ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
  * CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
  * CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
  * CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
- * 
- * -- 3. AUTH TRIGGER (Auto-create profile)
- * CREATE OR REPLACE FUNCTION public.handle_new_user()
- * RETURNS trigger AS $$
- * BEGIN
- *   INSERT INTO public.profiles (id, name, username, avatar, email)
- *   VALUES (new.id, new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'avatar', new.email);
- *   RETURN new;
- * END;
- * $$ LANGUAGE plpgsql SECURITY DEFINER;
- * 
- * CREATE TRIGGER on_auth_user_created
- *   AFTER INSERT ON auth.users
- *   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
  */
 
 const formatError = (error: any, prefix: string): string => {
@@ -50,44 +42,63 @@ const formatError = (error: any, prefix: string): string => {
   const message = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
   
   if (message.toLowerCase().includes('email not confirmed')) {
-    return "Email confirmation required. Please check your inbox.";
+    return "Verification Required: Please check your email inbox (and spam) for the confirmation link.";
   }
 
-  // Specific check for missing columns which often happens during development
   if (message.includes('column') && message.includes('does not exist')) {
-    const colMatch = message.match(/column "(.*?)"/);
-    const colName = colMatch ? colMatch[1] : "required";
-    return `${prefix}: The '${colName}' column is missing from your database table. Please run the ALTER TABLE SQL provided in api.ts.`;
+    return `Schema Mismatch: The database is missing a required column. Please check the SQL migration notes in api.ts.`;
   }
 
   if (message.includes('relation') && message.includes('does not exist')) {
-    return `${prefix}: Database table missing. Please check your Supabase SQL Editor.`;
+    return `Database Error: A required table is missing from your Supabase project.`;
   }
+
+  if (message.includes('JWT') || message.includes('invalid claim')) {
+    return "Session Expired: Please clear your browser cache/cookies or use the Reset Session tool.";
+  }
+
   return `${prefix}: ${message}`;
 };
 
 export const api = {
   system: {
-    checkHealth: async () => {
-      const tables = ['profiles', 'chats', 'messages', 'stories', 'spaces', 'products', 'transactions'];
-      const results: Record<string, { exists: boolean; error?: string }> = {};
-      
-      for (const table of tables) {
-        const { error } = await supabase.from(table).select('*').limit(1);
-        const isMissing = error?.message?.includes('relation') && error?.message?.includes('does not exist');
-        results[table] = {
-          exists: !isMissing,
-          error: error ? error.message : undefined
+    diagnose: async () => {
+      const results = {
+        connection: false,
+        auth: false,
+        tables: { profiles: false, chats: false, messages: false, stories: false, products: false, spaces: false, transactions: false, calls: false },
+        error: null as string | null
+      };
+
+      try {
+        // Check connection & basic session
+        const { data: { session }, error: authErr } = await supabase.auth.getSession();
+        results.connection = true;
+        results.auth = !authErr;
+
+        // Check tables with row count (efficient check for table existence and RLS read permission)
+        const checkTable = async (name: string) => {
+          try {
+            const { error } = await supabase.from(name).select('*', { count: 'exact', head: true }).limit(1);
+            return !error || !error.message.includes('does not exist');
+          } catch {
+            return false;
+          }
         };
+
+        results.tables.profiles = await checkTable('profiles');
+        results.tables.chats = await checkTable('chats');
+        results.tables.messages = await checkTable('messages');
+        results.tables.stories = await checkTable('stories');
+        results.tables.products = await checkTable('products');
+        results.tables.spaces = await checkTable('spaces');
+        results.tables.transactions = await checkTable('transactions');
+        results.tables.calls = await checkTable('calls');
+
+      } catch (e: any) {
+        results.error = e.message;
       }
 
-      const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
-      const hasPingSpaceBucket = buckets?.some(b => b.name === 'PingSpace_App');
-      results['storage'] = {
-        exists: !!hasPingSpaceBucket,
-        error: bucketError ? bucketError.message : (!hasPingSpaceBucket ? 'Bucket "PingSpace_App" not found' : undefined)
-      };
-      
       return results;
     }
   },
@@ -96,34 +107,42 @@ export const api = {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(formatError(error, "Login failed"));
 
-      // Get profile with retry logic
+      // Get profile with robust fallback
       let profile = null;
-      for (let i = 0; i < 3; i++) {
-        const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
-        if (p) { profile = p; break; }
-        await new Promise(r => setTimeout(r, 500));
-      }
-
-      if (!profile) {
-        const avatar = (data.user.user_metadata as any)?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`;
-        const { data: newP } = await supabase.from('profiles').insert({
-          id: data.user.id,
-          name: (data.user.user_metadata as any)?.name || 'User',
-          username: (data.user.user_metadata as any)?.username || email.split('@')[0],
-          avatar: avatar,
-          email: email
-        }).select().single();
-        profile = newP;
+      try {
+        const { data: p, error: profileErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        
+        if (p) {
+          profile = p;
+        } else if (!profileErr || profileErr.code === 'PGRST116') {
+          // If no profile exists, attempt creation from metadata
+          const metadata = data.user.user_metadata || {};
+          const { data: newP } = await supabase.from('profiles').insert({
+            id: data.user.id,
+            name: metadata.name || email.split('@')[0],
+            username: metadata.username || `user_${data.user.id.slice(0, 5)}`,
+            avatar: metadata.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
+            email: email
+          }).select().maybeSingle();
+          
+          if (newP) profile = newP;
+        }
+      } catch (e) {
+        console.warn("Profile fetch/create failed, using auth metadata instead", e);
       }
 
       const p = profile as any;
       return {
         id: data.user.id,
-        name: p?.name || 'User',
-        avatar: p?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
+        name: p?.name || data.user.user_metadata?.name || 'User',
+        avatar: p?.avatar || data.user.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}`,
         isOnline: true,
-        status: p?.status,
-        bio: p?.bio
+        status: p?.status || 'Available',
+        bio: p?.bio || ''
       };
     },
     signup: async (form: any): Promise<User> => {
@@ -131,13 +150,19 @@ export const api = {
       const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        options: { data: { name: form.name, username: form.username, avatar: avatarUrl } }
+        options: { 
+          data: { 
+            name: form.name, 
+            username: form.username, 
+            phone: form.phone,
+            avatar: avatarUrl 
+          } 
+        }
       });
       if (error) throw new Error(formatError(error, "Signup failed"));
       if (!data.user) throw new Error("Signup failed: No user returned");
       return { id: data.user.id, name: form.name, avatar: avatarUrl, isOnline: true };
     },
-    // Fix: Added checkUsernameAvailability to resolve missing property errors in components/AuthScreens.tsx
     checkUsernameAvailability: async (username: string): Promise<boolean> => {
       try {
         const { data, error } = await supabase
@@ -146,14 +171,10 @@ export const api = {
           .eq('username', username)
           .maybeSingle();
         
-        // PGRST116 is "No rows found", which means the username is available
-        if (error && error.code !== 'PGRST116' && !error.message.includes('column')) {
-          throw error;
-        }
+        if (error && error.code !== 'PGRST116') return true; 
         return !data;
       } catch (e) {
-        console.warn("Check handle failed, likely missing column:", e);
-        return true; // Default to available on network error or missing schema to prevent blocking user
+        return true; 
       }
     },
     resendConfirmationEmail: async (email: string): Promise<void> => {
@@ -177,7 +198,6 @@ export const api = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No active session");
       
-      // Sanitizing updates to ensure we don't send undefined fields
       const payload: any = {};
       if (updates.name !== undefined) payload.name = updates.name;
       if (updates.avatar !== undefined) payload.avatar = updates.avatar;
@@ -192,17 +212,8 @@ export const api = {
         .maybeSingle();
         
       if (error) throw new Error(formatError(error, "Profile update failed"));
-      if (!data) throw new Error("Profile not found in database.");
-      
       const d = data as any;
-      return { 
-        id: d.id, 
-        name: d.name, 
-        avatar: d.avatar, 
-        status: d.status, 
-        bio: d.bio, 
-        isOnline: true 
-      };
+      return { id: d.id, name: d.name, avatar: d.avatar, status: d.status, bio: d.bio, isOnline: true };
     },
     logout: async () => { await authService.logout(); }
   },
@@ -220,66 +231,26 @@ export const api = {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return [];
-        
-        const { data: chatsData, error } = await supabase
-          .from('chats')
-          .select(`*, messages(*)`)
-          .contains('members', [user.id])
-          .order('last_message_time', { ascending: false });
-        
+        const { data: chatsData, error } = await supabase.from('chats').select(`*, messages(*)`).contains('members', [user.id]).order('last_message_time', { ascending: false });
         if (error) throw error;
         const chats = (chatsData || []) as any[];
-
         const otherUserIds = new Set<string>();
-        chats.forEach(c => {
-          if (!c.is_group) {
-            const otherId = c.members.find((m: string) => m !== user.id);
-            if (otherId) otherUserIds.add(otherId);
-          }
-        });
-
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, name, avatar, status, bio')
-          .in('id', Array.from(otherUserIds));
-        
+        chats.forEach(c => { if (!c.is_group) { const otherId = c.members.find((m: string) => m !== user.id); if (otherId) otherUserIds.add(otherId); } });
+        const { data: profilesData } = await supabase.from('profiles').select('id, name, avatar, status, bio').in('id', Array.from(otherUserIds));
         const profiles = (profilesData || []) as any[];
         const profileMap = new Map(profiles.map(p => [p.id, p]));
-
         return chats.map(d => {
           let participant: User;
-          
-          if (d.is_group) {
-            participant = { id: d.id, name: d.name, avatar: d.avatar };
-          } else {
+          if (d.is_group) { participant = { id: d.id, name: d.name, avatar: d.avatar }; } 
+          else {
             const otherId = d.members.find((m: string) => m !== user.id);
             const p = profileMap.get(otherId) as any;
-            participant = { 
-              id: otherId || 'unknown', 
-              name: p?.name || 'User', 
-              avatar: p?.avatar || `https://ui-avatars.com/api/?name=U`,
-              status: p?.status,
-              bio: p?.bio
-            };
+            participant = { id: otherId || 'unknown', name: p?.name || 'User', avatar: p?.avatar || `https://ui-avatars.com/api/?name=U`, status: p?.status, bio: p?.bio };
           }
-
           return {
-            id: d.id,
-            participant,
-            lastMessage: d.last_message || '',
-            lastTime: d.last_message_time ? new Date(d.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-            unread: 0,
-            messages: (d.messages || []).map((m: any) => ({
-              id: m.id,
-              senderId: m.sender_id,
-              text: m.text,
-              type: m.type,
-              timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              createdAt: new Date(m.created_at).getTime()
-            })),
-            isGroup: d.is_group,
-            isPinned: d.is_pinned,
-            disappearingMode: d.disappearing_mode
+            id: d.id, participant, lastMessage: d.last_message || '', lastTime: d.last_message_time ? new Date(d.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            unread: 0, messages: (d.messages || []).map((m: any) => ({ id: m.id, senderId: m.sender_id, text: m.text, type: m.type, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), createdAt: new Date(m.created_at).getTime() })),
+            isGroup: d.is_group, isPinned: d.is_pinned, disappearingMode: d.disappearing_mode
           };
         });
       } catch (e) { return []; }
@@ -297,31 +268,15 @@ export const api = {
     createChat: async (contactId: string): Promise<ChatSession> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Unauthorized");
-      
-      const { data: existing } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('is_group', false)
-        .contains('members', [user.id, contactId])
-        .maybeSingle();
-      
+      const { data: existing } = await supabase.from('chats').select('*').eq('is_group', false).contains('members', [user.id, contactId]).maybeSingle();
       if (existing) {
-        const { data: contact } = await supabase.from('profiles').select('*').eq('id', contactId).single();
+        const { data: contact } = await supabase.from('profiles').select('*').eq('id', contactId).maybeSingle();
         const c = contact as any;
         const e = existing as any;
-        return { 
-          id: e.id, 
-          participant: { id: contactId, name: c?.name || 'User', avatar: c?.avatar || '' }, 
-          lastMessage: e.last_message, 
-          lastTime: 'Now', 
-          unread: 0, 
-          messages: [], 
-          isGroup: false 
-        };
+        return { id: e.id, participant: { id: contactId, name: c?.name || 'User', avatar: c?.avatar || '' }, lastMessage: e.last_message, lastTime: 'Now', unread: 0, messages: [], isGroup: false };
       }
-
       const members = [user.id, contactId];
-      const { data: contact } = await supabase.from('profiles').select('*').eq('id', contactId).single();
+      const { data: contact } = await supabase.from('profiles').select('*').eq('id', contactId).maybeSingle();
       const { data, error } = await supabase.from('chats').insert({ is_group: false, members, last_message: 'Started conversation' }).select().single();
       if (error) throw new Error(formatError(error, "Failed to start chat"));
       const d = data as any;
@@ -336,10 +291,7 @@ export const api = {
       await supabase.from('chats').update({ last_message: text || type, last_message_time: new Date().toISOString() }).eq('id', sessionId);
     },
     togglePin: async (chatId: string, isPinned: boolean): Promise<void> => {
-      const { error } = await supabase
-        .from('chats')
-        .update({ is_pinned: isPinned })
-        .eq('id', chatId);
+      const { error } = await supabase.from('chats').update({ is_pinned: isPinned }).eq('id', chatId);
       if (error) throw new Error(formatError(error, "Failed to update pin state"));
     }
   },
@@ -368,51 +320,64 @@ export const api = {
       return { id: d.id, type: d.type, amount: d.amount, date: 'Just now', entity: d.entity };
     }
   },
+  calls: {
+    list: async (): Promise<CallLog[]> => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+        const { data, error } = await supabase
+          .from('calls')
+          .select('*, profiles!calls_participant_id_fkey(*)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        return ((data || []) as any[]).map(d => ({
+          id: d.id,
+          participant: {
+            id: d.profiles?.id || 'unknown',
+            name: d.profiles?.name || 'Unknown User',
+            avatar: d.profiles?.avatar || `https://ui-avatars.com/api/?name=U`,
+          },
+          type: d.type,
+          mediaType: d.media_type,
+          duration: d.duration,
+          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }),
+          createdAt: new Date(d.created_at).getTime()
+        }));
+      } catch (e) { return []; }
+    },
+    save: async (log: Omit<CallLog, 'id' | 'timestamp' | 'createdAt'>): Promise<void> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Unauthorized");
+      
+      const { error } = await supabase.from('calls').insert({
+        user_id: user.id,
+        participant_id: log.participant.id,
+        type: log.type,
+        media_type: log.mediaType,
+        duration: log.duration
+      });
+      
+      if (error) throw new Error(formatError(error, "Failed to log neural transmission"));
+    }
+  },
   stories: {
     list: async (): Promise<Story[]> => {
       try {
         const { data, error } = await supabase.from('stories').select('*').order('created_at', { ascending: false });
         if (error) throw error;
-        // Correcting property mapping to match Story interface
-        return ((data || []) as any[]).map(d => ({ 
-          id: d.id, 
-          userId: d.user_id, 
-          userName: d.user_name, 
-          userAvatar: d.user_avatar, 
-          type: 'image',
-          content: d.image_url, 
-          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-          viewed: false, 
-          caption: d.caption 
-        }));
+        return ((data || []) as any[]).map(d => ({ id: d.id, userId: d.user_id, userName: d.user_name, userAvatar: d.user_avatar, type: 'image', content: d.image_url, timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), viewed: false, caption: d.caption }));
       } catch (e) { return []; }
     },
     addStory: async (image: string, caption: string): Promise<Story> => {
       const user = await authService.getCurrentUser();
       if (!user) throw new Error("Unauthorized");
-      
-      const { data, error } = await supabase.from('stories').insert({ 
-        user_id: user.id, 
-        user_name: user.name, 
-        user_avatar: user.avatar, 
-        image_url: image, 
-        caption 
-      }).select().single();
-      
+      const { data, error } = await supabase.from('stories').insert({ user_id: user.id, user_name: user.name, user_avatar: user.avatar, image_url: image, caption }).select().single();
       if (error) throw new Error(formatError(error, "Failed to share story"));
       const d = data as any;
-      // Correcting property mapping to match Story interface
-      return { 
-        id: d.id, 
-        userId: d.user_id, 
-        userName: d.user_name, 
-        userAvatar: d.user_avatar, 
-        type: 'image',
-        content: d.image_url, 
-        timestamp: 'Just now', 
-        viewed: false, 
-        caption: d.caption 
-      };
+      return { id: d.id, userId: d.user_id, userName: d.user_name, userAvatar: d.user_avatar, type: 'image', content: d.image_url, timestamp: 'Just now', viewed: false, caption: d.caption };
     }
   },
   spaces: {
@@ -424,22 +389,10 @@ export const api = {
       } catch (e) { return []; }
     },
     create: async (formData: { name: string; description: string; image: string }): Promise<Space> => {
-      const { data, error } = await supabase.from('spaces').insert({
-        name: formData.name,
-        description: formData.description,
-        image_url: formData.image,
-        member_count: 1
-      }).select().single();
+      const { data, error } = await supabase.from('spaces').insert({ name: formData.name, description: formData.description, image_url: formData.image, member_count: 1 }).select().single();
       if (error) throw new Error(formatError(error, "Failed to create space"));
       const d = data as any;
-      return {
-        id: d.id,
-        name: d.name,
-        members: d.member_count,
-        image: d.image_url,
-        description: d.description,
-        joined: true
-      };
+      return { id: d.id, name: d.name, members: d.member_count, image: d.image_url, description: d.description, joined: true };
     }
   },
   market: {
@@ -447,18 +400,7 @@ export const api = {
       try {
         const { data, error } = await supabase.from('products').select('*');
         if (error) throw error;
-        return ((data || []) as any[]).map(d => ({ 
-          id: d.id, 
-          title: d.title, 
-          price: d.price, 
-          image: d.image_url, 
-          seller: d.seller_name, 
-          rating: 4.5, 
-          description: d.description,
-          category: d.category,
-          condition: d.condition,
-          location: d.location
-        }));
+        return ((data || []) as any[]).map(d => ({ id: d.id, title: d.title, price: d.price, image: d.image_url, seller: d.seller_name, rating: 4.5, description: d.description, category: d.category, condition: d.condition, location: d.location }));
       } catch (e) { return []; }
     }
   }

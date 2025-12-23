@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
-import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff, Plus, Tag, Wallet as WalletIcon } from 'lucide-react';
-import { Tab, Message, ActiveCall } from './types';
+import React, { useEffect, useState, useRef } from 'react';
+import { MessageCircle, CircleDashed, Compass, LayoutGrid, ShoppingBag, User as UserIcon, CheckCircle, AlertCircle, Info, Loader2, Phone, Video, Mic, MicOff, PhoneOff, VideoOff, Maximize2, WifiOff, Plus, Tag, Wallet as WalletIcon, Signal, Radio } from 'lucide-react';
+import { Tab, Message, ActiveCall, CallLog } from './types';
 import { ChatList, ChatWindow } from './components/ChatFeatures';
 import { StatusScreen, DiscoveryScreen, SpacesScreen, MarketplaceScreen, ProfileScreen } from './components/TabScreens';
 import { SplashScreen, LoginScreen, SignupScreen, ForgotPasswordScreen } from './components/AuthScreens';
@@ -15,15 +15,42 @@ import { notificationService } from './services/notificationService';
 const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
   const dispatch = useGlobalDispatch();
   const [duration, setDuration] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
+  // Simulated Ringing & Hardware Access
   useEffect(() => {
+    const startHardware = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: true, 
+          video: call.type === 'video' 
+        });
+        setLocalStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("Hardware access denied:", err);
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Hardware permissions required for calls.' }});
+      }
+    };
+
+    startHardware();
+
     if (call.status === 'ringing') {
       const timer = setTimeout(() => {
         dispatch({ type: 'SET_CALL_STATUS', payload: 'connected' });
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [call.status, dispatch]);
+
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [call.status, call.type, dispatch]);
 
   useEffect(() => {
     if (call.status === 'connected') {
@@ -34,68 +61,149 @@ const CallOverlay: React.FC<{ call: ActiveCall }> = ({ call }) => {
     }
   }, [call.status]);
 
+  // Handle Mute/Video Toggles locally on the stream
+  useEffect(() => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => track.enabled = !call.isMuted);
+      localStream.getVideoTracks().forEach(track => track.enabled = !call.isVideoOff);
+    }
+  }, [call.isMuted, call.isVideoOff, localStream]);
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const handleEndCall = async () => {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Save to history before ending
+    const log: Omit<CallLog, 'id' | 'timestamp' | 'createdAt'> = {
+      participant: call.participant,
+      type: duration === 0 && call.status === 'ringing' ? 'missed' : 'outgoing',
+      mediaType: call.type,
+      duration: duration
+    };
+    
+    try {
+      await api.calls.save(log);
+      const newLog: CallLog = {
+        ...log,
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: Date.now()
+      };
+      dispatch({ type: 'ADD_CALL_LOG', payload: newLog });
+    } catch (e) {
+      console.warn("Failed to log call transmission locally", e);
+    }
+
+    dispatch({ type: 'END_CALL' });
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center animate-in zoom-in-95 duration-500 overflow-hidden">
       <div className="absolute inset-0 bg-slate-800">
          {call.type === 'video' && !call.isVideoOff ? (
-            <img 
-              src={`https://picsum.photos/800/1200?random=${call.participant.id}`} 
-              className="w-full h-full object-cover opacity-60" 
-              alt="Video Feed"
-            />
+            <div className="relative w-full h-full">
+               <img 
+                 src={`https://picsum.photos/800/1200?random=${call.participant.id}`} 
+                 className="w-full h-full object-cover opacity-80" 
+                 alt="Remote Video Feed"
+               />
+               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
+            </div>
          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-               <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center">
-                  <UserIcon className="w-16 h-16 text-slate-500" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+               <div className="relative">
+                  <div className="absolute inset-0 bg-[#ff1744]/20 blur-[100px] rounded-full animate-pulse-slow"></div>
+                  <div className="w-40 h-40 rounded-[3rem] bg-slate-800 flex items-center justify-center border border-white/5 relative z-10 shadow-2xl">
+                     <Radio className="w-16 h-16 text-[#ff1744] animate-bounce" />
+                  </div>
+                  <div className="absolute -bottom-12 left-0 right-0 flex justify-center gap-1">
+                     {[1,2,3,4,5].map(i => (
+                        <div key={i} className="w-1 h-8 bg-[#ff1744]/40 rounded-full animate-pulse" style={{ animationDelay: `${i * 0.1}s`, height: `${Math.random() * 40 + 20}px` }}></div>
+                     ))}
+                  </div>
                </div>
             </div>
          )}
-         {call.type === 'video' && call.status === 'connected' && (
-            <div className="absolute top-4 right-4 w-28 h-36 bg-black rounded-xl overflow-hidden border-2 border-white/20 shadow-xl">
-               <img src="https://picsum.photos/200/300" className="w-full h-full object-cover" alt="Me" />
+
+         {/* Local Preview Window (PiP) */}
+         <div className={`absolute top-6 right-6 w-32 h-44 bg-black rounded-[2rem] overflow-hidden border-2 border-white/10 shadow-2xl transition-all duration-700 ${call.status === 'connected' ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-50'}`}>
+            {call.type === 'video' ? (
+               <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  muted 
+                  playsInline 
+                  className={`w-full h-full object-cover transform scale-x-[-1] ${call.isVideoOff ? 'hidden' : 'block'}`}
+               />
+            ) : null}
+            {(!call.type || call.isVideoOff) && (
+               <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                  <UserIcon className="w-8 h-8 text-slate-600" />
+               </div>
+            )}
+            <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded-lg border border-white/10">
+               <span className="text-[8px] font-black uppercase text-white tracking-widest">My Node</span>
             </div>
-         )}
-      </div>
-
-      <div className="absolute top-12 flex flex-col items-center z-10 w-full">
-         <div className="w-24 h-24 rounded-full border-4 border-white/10 p-1 mb-4 shadow-2xl">
-            <img src={call.participant.avatar} className="w-full h-full rounded-full object-cover" alt={call.participant.name} />
          </div>
-         <h2 className="text-2xl font-bold text-white mb-1">{call.participant.name}</h2>
-         <p className="text-white/60 font-medium animate-pulse">
-            {call.status === 'ringing' ? 'Calling...' : formatTime(duration)}
-         </p>
+
+         {/* Connection Info */}
+         <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/10">
+            <Signal className="w-4 h-4 text-emerald-500" />
+            <div className="flex flex-col">
+               <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Link Strength</span>
+               <span className="text-[10px] font-bold text-white leading-none">OPTIMAL TRANSMISSION</span>
+            </div>
+         </div>
       </div>
 
-      <div className="absolute bottom-12 w-full max-w-sm px-8 z-10">
-         <div className="flex items-center justify-between bg-black/20 backdrop-blur-md rounded-3xl p-4 border border-white/10">
+      <div className="absolute top-24 flex flex-col items-center z-10 w-full animate-in slide-in-from-top-10 duration-1000">
+         <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-tr from-[#ff1744] to-red-400 rounded-full blur opacity-40 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+            <div className="w-28 h-28 rounded-full border-4 border-white/10 p-1 mb-6 shadow-2xl relative bg-slate-900">
+               <img src={call.participant.avatar} className="w-full h-full rounded-full object-cover" alt={call.participant.name} />
+            </div>
+         </div>
+         <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter shadow-sm">{call.participant.name}</h2>
+         <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${call.status === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-[#ff1744] animate-bounce'}`}></div>
+            <p className="text-white/60 font-black uppercase tracking-[0.2em] text-xs">
+               {call.status === 'ringing' ? 'Initiating Link...' : formatTime(duration)}
+            </p>
+         </div>
+      </div>
+
+      <div className="absolute bottom-16 w-full max-w-sm px-8 z-10 animate-in slide-in-from-bottom-10 duration-700">
+         <div className="flex items-center justify-between bg-black/40 backdrop-blur-2xl rounded-[3rem] p-5 border border-white/10 shadow-2xl">
             <button 
               onClick={() => dispatch({type: 'TOGGLE_CALL_MUTE'})}
-              className={`p-4 rounded-full transition-all ${call.isMuted ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              className={`p-5 rounded-full transition-all active:scale-90 ${call.isMuted ? 'bg-white text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.4)]' : 'bg-white/10 text-white hover:bg-white/20'}`}
             >
                {call.isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
+            
             <button 
-              onClick={() => dispatch({type: 'END_CALL'})}
-              className="p-5 bg-[#ff1744] text-white rounded-full shadow-lg shadow-red-500/40 hover:scale-110 transition-transform"
+              onClick={handleEndCall}
+              className="p-7 bg-[#ff1744] text-white rounded-full shadow-[0_0_40px_rgba(255,23,68,0.4)] hover:scale-110 active:scale-95 transition-all group"
             >
-               <PhoneOff className="w-8 h-8" />
+               <PhoneOff className="w-10 h-10 group-hover:rotate-12 transition-transform" />
             </button>
+
             {call.type === 'video' ? (
                <button 
                  onClick={() => dispatch({type: 'TOGGLE_CALL_VIDEO'})}
-                 className={`p-4 rounded-full transition-all ${call.isVideoOff ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                 className={`p-5 rounded-full transition-all active:scale-90 ${call.isVideoOff ? 'bg-white text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.4)]' : 'bg-white/10 text-white hover:bg-white/20'}`}
                >
                   {call.isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
                </button>
             ) : (
-               <button className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20">
+               <button className="p-5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all">
                   <Maximize2 className="w-6 h-6" />
                </button>
             )}
@@ -137,17 +245,18 @@ const MainAppContent = () => {
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        const [chats, contacts, products, spaces, transactions, stories] = await Promise.all([
+        const [chats, contacts, products, spaces, transactions, stories, callHistory] = await Promise.all([
           api.chats.list(),
           api.contacts.list(),
           api.market.getProducts(),
           api.spaces.list(),
           api.wallet.getTransactions(),
-          api.stories.list()
+          api.stories.list(),
+          api.calls.list()
         ]);
         dispatch({ 
           type: 'SET_DATA', 
-          payload: { chats, contacts, products, spaces, transactions, stories } 
+          payload: { chats, contacts, products, spaces, transactions, stories, callHistory } 
         });
         const token = await authService.getToken();
         if (token) socketService.connect(token);

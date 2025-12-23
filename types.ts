@@ -91,6 +91,16 @@ export interface Transaction {
   entity: string;
 }
 
+export interface CallLog {
+  id: string;
+  participant: User;
+  type: 'incoming' | 'outgoing' | 'missed';
+  mediaType: 'audio' | 'video';
+  duration: number; // seconds
+  timestamp: string;
+  createdAt: number;
+}
+
 export interface Notification {
   id: string;
   type: 'success' | 'error' | 'info';
@@ -169,6 +179,7 @@ export interface GlobalState {
   cart: CartItem[];
   notifications: Notification[];
   transactions: Transaction[];
+  callHistory: CallLog[];
   spaces: Space[];
   products: Product[];
   workspaceWidgets: WorkspaceWidget[];
@@ -197,13 +208,15 @@ export type Action =
   | { type: 'RECEIVE_MESSAGE'; payload: { sessionId: string; message: Message } }
   | { type: 'MARK_READ'; payload: string }
   | { type: 'ADD_TRANSACTION'; payload: Transaction }
+  | { type: 'ADD_CALL_LOG'; payload: CallLog }
+  | { type: 'SET_CALL_HISTORY'; payload: CallLog[] }
   | { type: 'ADD_PRODUCT'; payload: Product }
   | { type: 'ADD_STORY'; payload: Story }
   | { type: 'ADD_SPACE'; payload: Space }
   | { type: 'JOIN_SPACE'; payload: string }
   | { type: 'CREATE_GROUP'; payload: ChatSession }
   | { type: 'ADD_CHAT'; payload: ChatSession }
-  | { type: 'SET_DATA'; payload: { chats: ChatSession[], contacts: User[], products: Product[], spaces: Space[], transactions: Transaction[], stories: Story[] } }
+  | { type: 'SET_DATA'; payload: { chats: ChatSession[], contacts: User[], products: Product[], spaces: Space[], transactions: Transaction[], stories: Story[], callHistory?: CallLog[] } }
   | { type: 'TOGGLE_TASK'; payload: { widgetId: string; taskId: string } }
   | { type: 'TOGGLE_DISAPPEARING_MODE'; payload: { sessionId: string; enabled: boolean } }
   | { type: 'TOGGLE_STAR_MESSAGE'; payload: { sessionId: string; messageId: string } }
