@@ -39,10 +39,12 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const iconUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23ff1744'/%3E%3Cpath d='M298.67 42.67L64 320h170.67L192 469.33L426.67 192H256L298.67 42.67z' fill='white'/%3E%3C/svg%3E";
+
   const options = {
     body: data.body,
-    icon: 'https://ui-avatars.com/api/?name=PS&background=ff1744&color=fff&size=192', // Robust URL for icon
-    badge: 'https://ui-avatars.com/api/?name=PS&background=ff1744&color=fff&size=96',
+    icon: iconUrl,
+    badge: iconUrl,
     vibrate: [100, 50, 100],
     data: {
       url: data.url || './'

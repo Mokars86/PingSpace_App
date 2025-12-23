@@ -10,6 +10,7 @@ import { authService } from './auth';
  * CREATE TABLE public.profiles (
  *   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
  *   name TEXT,
+ *   username TEXT UNIQUE,
  *   avatar TEXT,
  *   email TEXT,
  *   status TEXT DEFAULT 'Available',
@@ -33,8 +34,8 @@ import { authService } from './auth';
  * CREATE OR REPLACE FUNCTION public.handle_new_user()
  * RETURNS trigger AS $$
  * BEGIN
- *   INSERT INTO public.profiles (id, name, avatar, email)
- *   VALUES (new.id, new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'avatar', new.email);
+ *   INSERT INTO public.profiles (id, name, username, avatar, email)
+ *   VALUES (new.id, new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'avatar', new.email);
  *   RETURN new;
  * END;
  * $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -108,6 +109,7 @@ export const api = {
         const { data: newP } = await supabase.from('profiles').insert({
           id: data.user.id,
           name: (data.user.user_metadata as any)?.name || 'User',
+          username: (data.user.user_metadata as any)?.username || email.split('@')[0],
           avatar: avatar,
           email: email
         }).select().single();
@@ -129,11 +131,30 @@ export const api = {
       const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        options: { data: { name: form.name, avatar: avatarUrl } }
+        options: { data: { name: form.name, username: form.username, avatar: avatarUrl } }
       });
       if (error) throw new Error(formatError(error, "Signup failed"));
       if (!data.user) throw new Error("Signup failed: No user returned");
       return { id: data.user.id, name: form.name, avatar: avatarUrl, isOnline: true };
+    },
+    // Fix: Added checkUsernameAvailability to resolve missing property errors in components/AuthScreens.tsx
+    checkUsernameAvailability: async (username: string): Promise<boolean> => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', username)
+          .maybeSingle();
+        
+        // PGRST116 is "No rows found", which means the username is available
+        if (error && error.code !== 'PGRST116' && !error.message.includes('column')) {
+          throw error;
+        }
+        return !data;
+      } catch (e) {
+        console.warn("Check handle failed, likely missing column:", e);
+        return true; // Default to available on network error or missing schema to prevent blocking user
+      }
     },
     resendConfirmationEmail: async (email: string): Promise<void> => {
       const { error } = await supabase.auth.resend({ type: 'signup', email });
