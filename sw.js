@@ -1,8 +1,8 @@
 
 const CACHE_NAME = 'pingspace-v1';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html'
+  './',
+  'index.html'
 ];
 
 self.addEventListener('install', (event) => {
@@ -41,11 +41,11 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/icon-192.png', // Fallback to manifest icon
-    badge: '/icon-192.png',
+    icon: 'https://ui-avatars.com/api/?name=PS&background=ff1744&color=fff&size=192', // Robust URL for icon
+    badge: 'https://ui-avatars.com/api/?name=PS&background=ff1744&color=fff&size=96',
     vibrate: [100, 50, 100],
     data: {
-      url: data.url || '/'
+      url: data.url || './'
     }
   };
 
@@ -63,12 +63,13 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window' }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url === '/' && 'focus' in client) {
+        // Match relative to current scope
+        if (client.url.includes(self.registration.scope) && 'focus' in client) {
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url || '/');
+        return clients.openWindow(event.notification.data.url || './');
       }
     })
   );
